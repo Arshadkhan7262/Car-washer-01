@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "91468661410",
+    "project_id": "upwork-task-8f47c",
+    "storage_bucket": "upwork-task-8f47c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:91468661410:android:81f2131fafe91b60ea4dfb",
+        "android_client_info": {
+          "package_name": "com.example.car_wash_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBtGxqFpTNAXVcnVJtW8qcs_svWQnG6J_0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:91468661410:android:3aa955ecb8e49837ea4dfb",
+        "android_client_info": {
+          "package_name": "com.example.flutter_ui_design"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBtGxqFpTNAXVcnVJtW8qcs_svWQnG6J_0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:91468661410:android:bafba5ce45004cbcea4dfb",
+        "android_client_info": {
+          "package_name": "com.example.wash_away"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBtGxqFpTNAXVcnVJtW8qcs_svWQnG6J_0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
