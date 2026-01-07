@@ -1,0 +1,86 @@
+/**
+ * Firebase Admin SDK Configuration
+ * 
+ * This module initializes Firebase Admin SDK for server-side authentication.
+ * Firebase handles OTP generation and verification on the client side.
+ * Backend only verifies the Firebase ID token and manages user records.
+ */
+
+import admin from 'firebase-admin';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// Initialize Firebase Admin SDK
+// Option 1: Using service account JSON (recommended for production)
+// Option 2: Using environment variables (for development)
+let firebaseApp;
+
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    // Parse service account from environment variable (JSON string)
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    
+    firebaseApp = admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: serviceAccount.project_id
+    });
+  } else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+    // Initialize using individual environment variables
+    firebaseApp = admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+      })
+    });
+  } else {
+    // Try to use default credentials (for Google Cloud environments)
+    firebaseApp = admin.initializeApp({
+      credential: admin.credential.applicationDefault()
+    });
+  }
+
+  console.log('✅ Firebase Admin SDK initialized successfully');
+} catch (error) {
+  console.error('❌ Firebase Admin SDK initialization error:', error.message);
+  console.error('Please configure Firebase credentials in .env file');
+  throw error;
+}
+
+/**
+ * Verify Firebase ID Token
+ * @param {string} idToken - Firebase ID token from client
+ * @returns {Promise<Object>} Decoded token with user info
+ */
+export const verifyFirebaseToken = async (idToken) => {
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    
+    // Ensure phone number is verified
+    if (!decodedToken.phone_number) {
+      throw new Error('Phone number not verified in Firebase token');
+    }
+
+    return {
+      uid: decodedToken.uid,
+      phone: decodedToken.phone_number,
+      phoneVerified: decodedToken.phone_number ? true : false,
+      email: decodedToken.email || null,
+      emailVerified: decodedToken.email_verified || false,
+      name: decodedToken.name || null
+    };
+  } catch (error) {
+    if (error.code === 'auth/id-token-expired') {
+      throw new Error('Firebase ID token has expired');
+    } else if (error.code === 'auth/id-token-revoked') {
+      throw new Error('Firebase ID token has been revoked');
+    } else if (error.code === 'auth/argument-error') {
+      throw new Error('Invalid Firebase ID token');
+    }
+    throw new Error(`Firebase token verification failed: ${error.message}`);
+  }
+};
+
+export default firebaseApp;
+

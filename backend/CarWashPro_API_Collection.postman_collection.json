@@ -1,0 +1,956 @@
+{
+	"info": {
+		"_postman_id": "carwash-pro-api-collection",
+		"name": "Car Wash Pro - Complete API Collection",
+		"description": "Complete API collection for Car Wash Pro platform including Admin, Washer, Customer, and Firebase Auth endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin Authentication",
+			"item": [
+				{
+					"name": "Admin Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@carwashpro.com\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Get Admin Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "Refresh Admin Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{admin_refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "auth", "refresh"]
+						}
+					}
+				},
+				{
+					"name": "Admin Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "auth", "logout"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Washer Authentication (Email - UI Flow)",
+			"item": [
+				{
+					"name": "1. Register Washer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"veer27420@gmail.com\",\n  \"password\": \"password123\",\n  \"name\": \"John Washer\",\n  \"phone\": \"+1234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/washer/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["washer", "auth", "register"]
+						},
+						"description": "Register a new washer account. Returns success message directing user to verify email. email_verified=false, status=pending"
+					}
+				},
+				{
+					"name": "2. Send Email OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"veer27420@gmail.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/washer/auth/send-email-otp",
+							"host": ["{{base_url}}"],
+							"path": ["washer", "auth", "send-email-otp"]
+						},
+						"description": "Send 4-digit OTP to email. OTP expires in 5 minutes."
+					}
+				},
+				{
+					"name": "3. Verify Email OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"veer27420@gmail.com\",\n  \"otp\": \"1234\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/washer/auth/verify-email-otp",
+							"host": ["{{base_url}}"],
+							"path": ["washer", "auth", "verify-email-otp"]
+						},
+						"description": "Verify 4-digit OTP. If status=pending, returns message about admin approval. If status=active, returns tokens."
+					}
+				},
+				{
+					"name": "4. Login Washer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"veer27420@gmail.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/washer/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["washer", "auth", "login"]
+						},
+						"description": "Login with email and password. Requires: email_verified=true AND status=active"
+					}
+				},
+				{
+					"name": "5. Forgot Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"veer27420@gmail.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/washer/auth/forgot-password",
+							"host": ["{{base_url}}"],
+							"path": ["washer", "auth", "forgot-password"]
+						},
+						"description": "Request password reset OTP. OTP expires in 5 minutes."
+					}
+				},
+				{
+					"name": "6. Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"veer27420@gmail.com\",\n  \"otp\": \"1234\",\n  \"newPassword\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/washer/auth/reset-password",
+							"host": ["{{base_url}}"],
+							"path": ["washer", "auth", "reset-password"]
+						},
+						"description": "Reset password with OTP and new password."
+					}
+				},
+				{
+					"name": "Get Washer Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{washer_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/washer/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["washer", "auth", "me"]
+						},
+						"description": "Get current washer profile (requires authentication)"
+					}
+				}
+			]
+		},
+		{
+			"name": "Washer Management (Admin)",
+			"item": [
+				{
+					"name": "Get All Washers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/washers?sort=-created_date&limit=50",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "washers"],
+							"query": [
+								{
+									"key": "sort",
+									"value": "-created_date"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Washer by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/washers/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "washers", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "washer_id_here"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Washer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Washer\",\n  \"phone\": \"+1234567890\",\n  \"email\": \"veer27420@gmail.com\",\n  \"branch_id\": \"branch_id_here\",\n  \"status\": \"pending\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/washers",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "washers"]
+						}
+					}
+				},
+				{
+					"name": "Update Washer",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"active\",\n  \"approval_note\": \"Approved by admin\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/washers/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "washers", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "washer_id_here"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Washer",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/washers/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "washers", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "washer_id_here"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Dashboard (Admin)",
+			"item": [
+				{
+					"name": "Get KPIs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/dashboard/kpis",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "dashboard", "kpis"]
+						}
+					}
+				},
+				{
+					"name": "Get Stats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/dashboard/stats?period=week",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "dashboard", "stats"],
+							"query": [
+								{
+									"key": "period",
+									"value": "week"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Activity",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/dashboard/activity?limit=10",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "dashboard", "activity"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Bookings (Admin)",
+			"item": [
+				{
+					"name": "Get All Bookings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/bookings?sort=-created_date&limit=100",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "bookings"],
+							"query": [
+								{
+									"key": "sort",
+									"value": "-created_date"
+								},
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Booking by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/bookings/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "bookings", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "booking_id_here"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Booking",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"customer_id\": \"customer_id_here\",\n  \"service_id\": \"service_id_here\",\n  \"date\": \"2024-01-15\",\n  \"time\": \"10:00\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/bookings",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "bookings"]
+						}
+					}
+				},
+				{
+					"name": "Update Booking",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"confirmed\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/bookings/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "bookings", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "booking_id_here"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Booking",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/bookings/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "bookings", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "booking_id_here"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Services (Admin)",
+			"item": [
+				{
+					"name": "Get All Services",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/services?sort=display_order&limit=50",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "services"],
+							"query": [
+								{
+									"key": "sort",
+									"value": "display_order"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Service by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/services/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "services", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "service_id_here"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Service",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Premium Wash\",\n  \"description\": \"Full car wash service\",\n  \"price\": 50.00,\n  \"duration\": 60\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/services",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "services"]
+						}
+					}
+				},
+				{
+					"name": "Update Service",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"price\": 55.00\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/services/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "services", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "service_id_here"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Service",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/services/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "services", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "service_id_here"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Customers (Admin)",
+			"item": [
+				{
+					"name": "Get All Customers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/customers?sort=-created_date&limit=50",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "customers"],
+							"query": [
+								{
+									"key": "sort",
+									"value": "-created_date"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Customer by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/customers/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "customers", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "customer_id_here"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Customer",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Name\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/customers/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "customers", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "customer_id_here"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Customer Bookings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/customers/:id/bookings",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "customers", ":id", "bookings"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "customer_id_here"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Firebase Authentication",
+			"item": [
+				{
+					"name": "Firebase Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"idToken\": \"firebase_id_token_here\",\n  \"role\": \"washer\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/firebase-login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "firebase-login"]
+						}
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "refresh"]
+						}
+					}
+				},
+				{
+					"name": "Get Customer Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/me/customer",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "me", "customer"]
+						}
+					}
+				},
+				{
+					"name": "Get Washer Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{washer_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/me/washer",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "me", "washer"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "admin_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "admin_refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "washer_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "customer_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
