@@ -51,11 +51,15 @@ import customerServiceRoutes from './customerService.routes.js';
 import customerVehicleTypeRoutes from './customerVehicleType.routes.js';
 import customerBookingRoutes from './customerBooking.routes.js';
 import draftBookingRoutes from './draftBooking.routes.js';
+import customerAddressRoutes from './customerAddress.routes.js';
+import customerVehicleRoutes from './customerVehicle.routes.js';
 router.use('/customer/profile', customerProfileRoutes); // Profile screen: profile data, stats, and preferences
 router.use('/customer/services', customerServiceRoutes); // Services: public endpoint for customers to view services
 router.use('/customer/vehicle-types', customerVehicleTypeRoutes); // Vehicle types: public endpoint for customers to view vehicle types
 router.use('/customer/bookings', customerBookingRoutes); // Bookings: customer booking management
 router.use('/customer/bookings/draft', draftBookingRoutes); // Draft bookings: save/load booking progress
+router.use('/customer/addresses', customerAddressRoutes); // Addresses: customer address management
+router.use('/customer/vehicles', customerVehicleRoutes); // Vehicles: customer vehicle management
 
 // Admin Vehicle Type routes
 import vehicleTypeRoutes from './vehicleType.routes.js';

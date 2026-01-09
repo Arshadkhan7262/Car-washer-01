@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:wash_away/screens/dashboard_screen.dart';
-import 'package:wash_away/screens/home_screen.dart';
 import 'package:wash_away/screens/track_order_screen.dart';
 import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
+import '../controllers/book_controller.dart';
 
 // Assuming you have defined your themes and colors elsewhere.
 // For this example, I'll use simple definitions for demonstration.
@@ -170,6 +171,170 @@ Get.offAll(DashboardScreen());                },
 
   Widget _buildBookingDetailsCard(BuildContext context, Color cardBackgroundColor, Color textColor) {
     final bool isDarkTheme = Theme.of(context).brightness == Brightness.dark;
+    
+    // Get BookController to access selected values (primary source)
+    final BookController? bookController = Get.isRegistered<BookController>() 
+        ? Get.find<BookController>() 
+        : null;
+    
+    // Extract booking ID from API response
+    final bookingId = bookingData?['booking_id']?.toString() ?? 
+                     bookingData?['_id']?.toString() ?? 
+                     bookingData?['id']?.toString() ?? 
+                     '#N/A';
+    
+    // Format booking ID to show only last 8 characters if it's longer
+    final String displayBookingId = bookingId.length > 8 
+        ? '#${bookingId.substring(bookingId.length - 8).toUpperCase()}'
+        : '#${bookingId.toUpperCase()}';
+    
+    // Extract total amount - PRIMARY: from controller (same as Pay button), FALLBACK: from API
+    double totalAmount = 0.0;
+    
+    // PRIMARY: Get from controller's selected service (same calculation as Pay button)
+    if (bookController?.selectedService.value != null) {
+      totalAmount = bookController!.selectedService.value!.basePrice;
+    }
+    
+    // FALLBACK: Get from API response if controller doesn't have it
+    if (totalAmount == 0.0 && bookingData != null) {
+      final apiTotal = bookingData?['total'] ?? 
+                       bookingData?['total_amount'] ?? 
+                       bookingData?['price'] ?? 
+                       bookingData?['amount'];
+      if (apiTotal != null) {
+        totalAmount = apiTotal is num ? apiTotal.toDouble() : 0.0;
+      }
+    }
+    
+    final String formattedTotal = '\$${totalAmount.toStringAsFixed(2)}';
+    
+    // Extract and format date & time - PRIMARY: from controller, FALLBACK: from API
+    String formattedDateTime = 'N/A';
+    try {
+      DateTime? bookingDate;
+      String? timeSlot;
+      
+      // PRIMARY: Get from controller (user's device input)
+      if (bookController?.selectedDate.value != null) {
+        bookingDate = bookController!.selectedDate.value;
+      }
+      if (bookController?.selectedTime.value.isNotEmpty == true) {
+        timeSlot = bookController!.selectedTime.value;
+      }
+      
+      // FALLBACK: Get from API response if controller doesn't have it
+      if (bookingDate == null) {
+        final apiDate = bookingData?['booking_date'] ?? bookingData?['date'] ?? bookingData?['scheduled_date'];
+        if (apiDate != null) {
+          if (apiDate is String) {
+            bookingDate = DateTime.tryParse(apiDate);
+            if (bookingDate == null && apiDate.contains('-')) {
+              final parts = apiDate.split('-');
+              if (parts.length == 3) {
+                bookingDate = DateTime.tryParse(apiDate);
+              }
+            }
+          } else if (apiDate is DateTime) {
+            bookingDate = apiDate;
+          }
+        }
+      }
+      
+      if (timeSlot == null || timeSlot.isEmpty) {
+        timeSlot = bookingData?['time_slot']?.toString() ?? 
+                  bookingData?['time']?.toString() ??
+                  bookingData?['scheduled_time']?.toString();
+      }
+      
+      // Format the date and time
+      if (bookingDate != null && timeSlot != null && timeSlot.isNotEmpty) {
+        final dateFormat = DateFormat('EEEE, MMMM d');
+        final formattedDate = dateFormat.format(bookingDate);
+        formattedDateTime = '$formattedDate at $timeSlot';
+      } else if (bookingDate != null) {
+        final dateFormat = DateFormat('EEEE, MMMM d');
+        formattedDateTime = dateFormat.format(bookingDate);
+      }
+    } catch (e) {
+      formattedDateTime = 'Date not available';
+    }
+    
+    // Extract location/address - PRIMARY: from controller, FALLBACK: from API
+    String location = 'Address not available';
+    
+    // PRIMARY: Get from controller (user's device input)
+    if (bookController != null) {
+      // Check if saved address is selected
+      if (bookController.selectedSavedAddress.value != null) {
+        location = bookController.selectedSavedAddress.value!.fullAddress;
+      } 
+      // Fallback to manual address input
+      else if (bookController.addressController.text.isNotEmpty) {
+        location = bookController.addressController.text;
+      }
+    }
+    
+    // FALLBACK: Get from API response if controller doesn't have it
+    if (location == 'Address not available' && bookingData != null) {
+      location = bookingData?['address']?.toString() ?? 
+                bookingData?['location']?.toString() ?? 
+                bookingData?['full_address']?.toString() ??
+                bookingData?['address_text']?.toString() ??
+                'Address not available';
+    }
+    
+    // Extract service name - PRIMARY: from controller, FALLBACK: from API
+    String serviceName = 'Service not available';
+    
+    // PRIMARY: Get from controller (from API but selected by user)
+    if (bookController?.selectedService.value != null) {
+      serviceName = bookController!.selectedService.value!.name;
+    }
+    
+    // FALLBACK: Get from API response if controller doesn't have it
+    if (serviceName == 'Service not available' && bookingData != null) {
+      // Try nested service object first
+      if (bookingData?['service'] is Map) {
+        serviceName = bookingData?['service']?['name']?.toString() ?? 
+                     bookingData?['service']?['service_name']?.toString() ??
+                     'Service not available';
+      } else {
+        // Try direct fields
+        serviceName = bookingData?['service_name']?.toString() ?? 
+                     bookingData?['service']?.toString() ??
+                     'Service not available';
+      }
+    }
+    
+    // Extract vehicle type - PRIMARY: from controller, FALLBACK: from API
+    String vehicleType = 'Vehicle type not available';
+    
+    // PRIMARY: Get from controller (from API but selected by user)
+    if (bookController?.selectedVehicleType.value != null) {
+      vehicleType = bookController!.selectedVehicleType.value!.displayName;
+    }
+    
+    // FALLBACK: Get from API response if controller doesn't have it
+    if (vehicleType == 'Vehicle type not available' && bookingData != null) {
+      // Try nested vehicle_type object first
+      if (bookingData?['vehicle_type'] is Map) {
+        vehicleType = bookingData?['vehicle_type']?['name']?.toString() ?? 
+                     bookingData?['vehicle_type']?['display_name']?.toString() ??
+                     bookingData?['vehicle_type']?['type']?.toString() ??
+                     'Vehicle type not available';
+      } else if (bookingData?['vehicle'] is Map) {
+        vehicleType = bookingData?['vehicle']?['type']?.toString() ?? 
+                     bookingData?['vehicle']?['vehicle_type']?.toString() ??
+                     'Vehicle type not available';
+      } else {
+        // Try direct fields
+        vehicleType = bookingData?['vehicle_type_name']?.toString() ?? 
+                     bookingData?['vehicle_type']?.toString() ??
+                     'Vehicle type not available';
+      }
+    }
+    
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).brightness== Brightness.dark? DarkTheme.card: LightTheme.card, // Use card background for the main card body
@@ -223,7 +388,7 @@ Get.offAll(DashboardScreen());                },
                       ),
                     ),
                     Text(
-                      '#693C09AC',
+                      displayBookingId,
                       style: AppStyles.headlineBold.copyWith(color: Colors.white, fontSize: 14),
                     ),
                   ],
@@ -239,7 +404,7 @@ Get.offAll(DashboardScreen());                },
                       ),
                     ),
                     Text(
-                      '\$29.00',
+                      formattedTotal,
                       style: AppStyles.headlineBold.copyWith(color: Colors.white,),
                     ),
                   ],
@@ -257,23 +422,30 @@ Get.offAll(DashboardScreen());                },
                 _buildDetailRow(
                   iconPath: 'assets/images/date.png',
                   label: 'Date & Time',
-                  value: 'Friday, December 12 at 10:00 AM',
+                  value: formattedDateTime,
                   backgroundColor: Color(0xff4E76E1).withValues(alpha: 0.1),
                   carColor: Colors.blue
                 ),
                 _buildDetailRow(
                   iconPath: 'assets/images/locate.png',
                   label: 'Location',
-                  value: '1 hr',
+                  value: location.toString(),
                   backgroundColor: Color(0xff24E2A9).withValues(alpha: 0.12),
                   carColor: Colors.green
                 ),
                 _buildDetailRow(
                   iconPath: 'assets/images/car3.png',
                   label: 'Service',
-                  value: 'Express Wash',
+                  value: serviceName.toString(),
                   backgroundColor: Color(0xffCA95FF).withValues(alpha: 0.13),
                   carColor: Color(0xff8844CD),
+                ),
+                _buildDetailRow(
+                  iconPath: 'assets/images/car3.png',
+                  label: 'Vehicle Type',
+                  value: vehicleType.toString(),
+                  backgroundColor: Color(0xffFFB84D).withValues(alpha: 0.13),
+                  carColor: Color(0xffFF8C00),
                 ),
 
                 const SizedBox(height: 16),

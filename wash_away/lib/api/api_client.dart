@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'package:http/http.dart' as http;
@@ -19,6 +20,20 @@ class ApiClient {
 
   /// Get authentication token
   String? get authToken => _authToken;
+
+  /// Check if backend server is reachable
+  Future<bool> checkBackendHealth() async {
+    try {
+      final healthUrl = Uri.parse('${AppConstants.baseUrl}/health');
+      final response = await http
+          .get(healthUrl)
+          .timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (e) {
+      log('⚠️ Backend health check failed: $e');
+      return false;
+    }
+  }
 
   /// Get base headers
   Map<String, String> _getHeaders({Map<String, String>? additionalHeaders}) {
@@ -65,10 +80,19 @@ class ApiClient {
       log('Headers: ${jsonEncode(requestHeaders)}');
       log('───────────────────────────────────────────────────────────');
 
-      // Make request
+      // Make request with timeout
       final response = await http
           .get(uri, headers: requestHeaders)
-          .timeout(Duration(milliseconds: AppConstants.connectionTimeout));
+          .timeout(
+            Duration(milliseconds: AppConstants.connectionTimeout),
+            onTimeout: () {
+              throw TimeoutException(
+                'Connection timeout after ${AppConstants.connectionTimeout}ms. '
+                'Please check if the backend server is running at $uri',
+                Duration(milliseconds: AppConstants.connectionTimeout),
+              );
+            },
+          );
 
       // Log response
       log('📥 API RESPONSE [GET]');
@@ -81,7 +105,16 @@ class ApiClient {
       log('❌ API ERROR [GET]');
       log('Error: $e');
       log('═══════════════════════════════════════════════════════════');
-      return ApiResponse(success: false, error: e.toString());
+      
+      // Provide more helpful error messages
+      String errorMessage = e.toString();
+      if (e is TimeoutException) {
+        errorMessage = 'Connection timeout. Please ensure the backend server is running at ${AppConstants.baseUrl}';
+      } else if (e.toString().contains('Failed host lookup') || e.toString().contains('SocketException')) {
+        errorMessage = 'Cannot connect to server. Please check your network connection and ensure the backend is running.';
+      }
+      
+      return ApiResponse(success: false, error: errorMessage);
     }
   }
 
@@ -109,10 +142,19 @@ class ApiClient {
       log('Request Body: $requestBody');
       log('───────────────────────────────────────────────────────────');
 
-      // Make request
+      // Make request with timeout
       final response = await http
           .post(url, headers: requestHeaders, body: requestBody)
-          .timeout(Duration(milliseconds: AppConstants.connectionTimeout));
+          .timeout(
+            Duration(milliseconds: AppConstants.connectionTimeout),
+            onTimeout: () {
+              throw TimeoutException(
+                'Connection timeout after ${AppConstants.connectionTimeout}ms. '
+                'Please check if the backend server is running at $url',
+                Duration(milliseconds: AppConstants.connectionTimeout),
+              );
+            },
+          );
 
       // Log response
       log('📥 API RESPONSE [POST]');
@@ -125,7 +167,16 @@ class ApiClient {
       log('❌ API ERROR [POST]');
       log('Error: $e');
       log('═══════════════════════════════════════════════════════════');
-      return ApiResponse(success: false, error: e.toString());
+      
+      // Provide more helpful error messages
+      String errorMessage = e.toString();
+      if (e is TimeoutException) {
+        errorMessage = 'Connection timeout. Please ensure the backend server is running at ${AppConstants.baseUrl}';
+      } else if (e.toString().contains('Failed host lookup') || e.toString().contains('SocketException')) {
+        errorMessage = 'Cannot connect to server. Please check your network connection and ensure the backend is running.';
+      }
+      
+      return ApiResponse(success: false, error: errorMessage);
     }
   }
 
@@ -153,10 +204,19 @@ class ApiClient {
       log('Request Body: $requestBody');
       log('───────────────────────────────────────────────────────────');
 
-      // Make request
+      // Make request with timeout
       final response = await http
           .put(url, headers: requestHeaders, body: requestBody)
-          .timeout(Duration(milliseconds: AppConstants.connectionTimeout));
+          .timeout(
+            Duration(milliseconds: AppConstants.connectionTimeout),
+            onTimeout: () {
+              throw TimeoutException(
+                'Connection timeout after ${AppConstants.connectionTimeout}ms. '
+                'Please check if the backend server is running at $url',
+                Duration(milliseconds: AppConstants.connectionTimeout),
+              );
+            },
+          );
 
       // Log response
       log('📥 API RESPONSE [PUT]');
@@ -169,7 +229,16 @@ class ApiClient {
       log('❌ API ERROR [PUT]');
       log('Error: $e');
       log('═══════════════════════════════════════════════════════════');
-      return ApiResponse(success: false, error: e.toString());
+      
+      // Provide more helpful error messages
+      String errorMessage = e.toString();
+      if (e is TimeoutException) {
+        errorMessage = 'Connection timeout. Please ensure the backend server is running at ${AppConstants.baseUrl}';
+      } else if (e.toString().contains('Failed host lookup') || e.toString().contains('SocketException')) {
+        errorMessage = 'Cannot connect to server. Please check your network connection and ensure the backend is running.';
+      }
+      
+      return ApiResponse(success: false, error: errorMessage);
     }
   }
 
@@ -194,10 +263,19 @@ class ApiClient {
       log('Headers: ${jsonEncode(requestHeaders)}');
       log('───────────────────────────────────────────────────────────');
 
-      // Make request
+      // Make request with timeout
       final response = await http
           .delete(url, headers: requestHeaders)
-          .timeout(Duration(milliseconds: AppConstants.connectionTimeout));
+          .timeout(
+            Duration(milliseconds: AppConstants.connectionTimeout),
+            onTimeout: () {
+              throw TimeoutException(
+                'Connection timeout after ${AppConstants.connectionTimeout}ms. '
+                'Please check if the backend server is running at $url',
+                Duration(milliseconds: AppConstants.connectionTimeout),
+              );
+            },
+          );
 
       // Log response
       log('📥 API RESPONSE [DELETE]');
@@ -210,7 +288,16 @@ class ApiClient {
       log('❌ API ERROR [DELETE]');
       log('Error: $e');
       log('═══════════════════════════════════════════════════════════');
-      return ApiResponse(success: false, error: e.toString());
+      
+      // Provide more helpful error messages
+      String errorMessage = e.toString();
+      if (e is TimeoutException) {
+        errorMessage = 'Connection timeout. Please ensure the backend server is running at ${AppConstants.baseUrl}';
+      } else if (e.toString().contains('Failed host lookup') || e.toString().contains('SocketException')) {
+        errorMessage = 'Cannot connect to server. Please check your network connection and ensure the backend is running.';
+      }
+      
+      return ApiResponse(success: false, error: errorMessage);
     }
   }
 

@@ -163,5 +163,29 @@ class BookingService {
       throw Exception('Failed to get booking: ${e.toString()}');
     }
   }
+
+  /// Cancel booking (Customer can only cancel pending or accepted bookings)
+  Future<Map<String, dynamic>> cancelBooking(String bookingId, {String? reason}) async {
+    try {
+      final encodedBookingId = Uri.encodeComponent(bookingId);
+      final response = await _apiClient.put(
+        '/customer/bookings/$encodedBookingId/cancel',
+        body: {
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+        },
+      );
+
+      if (!response.success) {
+        throw Exception(response.error ?? 'Failed to cancel booking');
+      }
+
+      final bookingData = response.data['data'] as Map<String, dynamic>;
+      log('✅ [cancelBooking] Booking cancelled: $bookingId');
+      return bookingData;
+    } catch (e) {
+      log('❌ [cancelBooking] Error: $e');
+      throw Exception('Failed to cancel booking: ${e.toString()}');
+    }
+  }
 }
 

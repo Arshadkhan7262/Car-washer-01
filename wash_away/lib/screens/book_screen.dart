@@ -26,9 +26,29 @@ class _BookScreenState extends State<BookScreen> {
     if (Get.isRegistered<BookController>()) {
       controller = Get.find<BookController>();
       // Reset PageController if it has existing clients to prevent multiple attachments
+      // This will create a new PageController with the current currentPage.value (which should be set from draft)
       if (controller.hasPageControllerClients) {
         controller.resetPageController();
       }
+      // Ensure PageController is created with the correct initial page
+      // Accessing pageController getter will create it with currentPage.value
+      // The getter uses currentPage.value as initialPage, so it should be correct
+      
+      // After first frame, ensure we're on the correct page (in case draft was loaded)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (controller.pageController.hasClients) {
+          final targetPage = controller.currentPage.value;
+          try {
+            final currentPageIndex = controller.pageController.page?.round() ?? 0;
+            if (currentPageIndex != targetPage) {
+              controller.pageController.jumpToPage(targetPage);
+            }
+          } catch (e) {
+            // If we can't read current page, just jump to target
+            controller.pageController.jumpToPage(targetPage);
+          }
+        }
+      });
     } else {
       controller = Get.put(BookController(), permanent: false);
     }
@@ -137,8 +157,10 @@ class _BookScreenState extends State<BookScreen> {
                   return GestureDetector(
                     onTap: () {
                       controller.selectedService.value = service;
-                      // Navigate immediately - controller handles PageView readiness
-                      controller.navigateToNextPage(Get.context!);
+                      // Use post-frame callback to ensure PageView is built
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        controller.navigateToNextPage(context);
+                      });
                     },
                     child: Container(
                       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -682,13 +704,6 @@ class _BookScreenState extends State<BookScreen> {
 
   // --- STAGE 4: PAYMENT SELECTION (NEW) ---
   Widget _buildPaymentStage(BookController controller) {
-    // Get selected service details
-    final selectedService = controller.selectedService.value;
-    final String serviceTitle = selectedService?.name ?? "Service";
-    final String servicePrice = selectedService != null 
-        ? "\$${selectedService.basePrice.toStringAsFixed(2)}"
-        : "\$0.00";
-    final String totalAmount = servicePrice;
 
     List<Map<String, dynamic>> paymentMethods = [
       {'name': 'Credit Card', 'details': '**** 4242', 'imagePath': 'assets/images/card.png', 'balance': null},
@@ -812,28 +827,38 @@ class _BookScreenState extends State<BookScreen> {
                         width: 1,
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                         Text('Order Summary', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w400)),
-                        const SizedBox(height: 15),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(serviceTitle, style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary.withValues(alpha: 0.48): LightTheme.textPrimary.withValues(alpha: 0.48), fontSize: 14,fontWeight: FontWeight.w400)),
-                            Text(servicePrice, style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary.withValues(alpha: 0.48): LightTheme.textPrimary.withValues(alpha: 0.48), fontSize: 14,fontWeight: FontWeight.w400)),
-                          ],
-                        ),
-                        const Divider(color: Colors.white30, height: 30),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                             Text('Total', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w400)),
-                            Text(totalAmount, style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ],
-                    ),
+                    child: Obx(() {
+                      // Get selected service details reactively
+                      final selectedService = controller.selectedService.value;
+                      final String serviceTitle = selectedService?.name ?? "Service";
+                      final String servicePrice = selectedService != null 
+                          ? "\$${selectedService.basePrice.toStringAsFixed(2)}"
+                          : "\$0.00";
+                      final String totalAmount = servicePrice;
+                      
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                           Text('Order Summary', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w400)),
+                          const SizedBox(height: 15),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(serviceTitle, style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary.withValues(alpha: 0.48): LightTheme.textPrimary.withValues(alpha: 0.48), fontSize: 14,fontWeight: FontWeight.w400)),
+                              Text(servicePrice, style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary.withValues(alpha: 0.48): LightTheme.textPrimary.withValues(alpha: 0.48), fontSize: 14,fontWeight: FontWeight.w400)),
+                            ],
+                          ),
+                          const Divider(color: Colors.white30, height: 30),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                               Text('Total', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w400)),
+                              Text(totalAmount, style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ],
+                      );
+                    }),
                   ),
 
                   const SizedBox(height: 30),
@@ -882,24 +907,32 @@ class _BookScreenState extends State<BookScreen> {
           ),
 
           // Pay Button (payment2.jpeg)
-          Obx(() => Padding(
-            padding: const EdgeInsets.only(top: 10.0),
-            child: Center(
-              child: SizedBox(
-                width: MediaQuery.of(Get.context!).size.width*0.5,
-                child: ElevatedButton(
-                  onPressed: controller.isStage4Complete ? () => controller.navigateToNextPage(Get.context!) : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.primary: LightTheme.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          Obx(() {
+            // Get selected service details reactively for Pay button
+            final selectedService = controller.selectedService.value;
+            final String totalAmount = selectedService != null 
+                ? "\$${selectedService.basePrice.toStringAsFixed(2)}"
+                : "\$0.00";
+            
+            return Padding(
+              padding: const EdgeInsets.only(top: 10.0),
+              child: Center(
+                child: SizedBox(
+                  width: MediaQuery.of(Get.context!).size.width*0.5,
+                  child: ElevatedButton(
+                    onPressed: controller.isStage4Complete ? () => controller.navigateToNextPage(Get.context!) : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.primary: LightTheme.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text('Pay $totalAmount',
+                        style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
-                  child: Text('Pay $totalAmount',
-                      style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ),
-            ),
-          )),
+            );
+          }),
         ],
       ),
     );

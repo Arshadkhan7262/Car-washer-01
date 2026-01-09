@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Booking from '../models/Booking.model.js';
 import User from '../models/User.model.js';
 import Service from '../models/Service.model.js';
@@ -110,11 +111,24 @@ export const getAllBookings = async (filters = {}) => {
  * Get booking by ID
  */
 export const getBookingById = async (bookingId) => {
-  const booking = await Booking.findById(bookingId)
-    .populate('customer_id', 'name email phone')
-    .populate('service_id', 'name description base_price pricing duration_minutes')
-    .populate('washer_id', 'name phone email status rating')
-    .lean();
+  let booking;
+  
+  // Check if it's a valid MongoDB ObjectId (24 hex characters)
+  if (mongoose.Types.ObjectId.isValid(bookingId) && String(new mongoose.Types.ObjectId(bookingId)) === bookingId) {
+    // It's a valid MongoDB ObjectId - use findById
+    booking = await Booking.findById(bookingId)
+      .populate('customer_id', 'name email phone')
+      .populate('service_id', 'name description base_price pricing duration_minutes')
+      .populate('washer_id', 'name phone email status rating')
+      .lean();
+  } else {
+    // Assume it's a human-readable booking_id (e.g., "CW-2026-6393")
+    booking = await Booking.findOne({ booking_id: bookingId })
+      .populate('customer_id', 'name email phone')
+      .populate('service_id', 'name description base_price pricing duration_minutes')
+      .populate('washer_id', 'name phone email status rating')
+      .lean();
+  }
 
   if (!booking) {
     throw new AppError('Booking not found', 404);
@@ -247,7 +261,46 @@ export const updateBooking = async (bookingId, updateData) => {
 };
 
 /**
- * Delete/Cancel booking
+ * Cancel booking by customer
+ * Customers can only cancel bookings that haven't started (pending or accepted)
+ */
+export const cancelBookingByCustomer = async (bookingId, customerId, reason = '') => {
+  const booking = await Booking.findById(bookingId);
+  
+  if (!booking) {
+    throw new AppError('Booking not found', 404);
+  }
+
+  // Verify booking belongs to customer
+  if (booking.customer_id.toString() !== customerId.toString()) {
+    throw new AppError('You do not have permission to cancel this booking', 403);
+  }
+
+  // Check if booking can be cancelled
+  // Customers can only cancel if status is 'pending' or 'accepted'
+  // Once washer is on_the_way or started, cancellation should go through admin
+  const cancellableStatuses = ['pending', 'accepted'];
+  if (!cancellableStatuses.includes(booking.status)) {
+    throw new AppError(
+      `Cannot cancel booking with status: ${booking.status}. Please contact support for assistance.`,
+      400
+    );
+  }
+
+  // Mark as cancelled
+  booking.status = 'cancelled';
+  booking.timeline.push({
+    status: 'cancelled',
+    timestamp: new Date(),
+    note: reason || 'Booking cancelled by customer'
+  });
+  await booking.save();
+
+  return booking;
+};
+
+/**
+ * Delete/Cancel booking (Admin only)
  */
 export const deleteBooking = async (bookingId) => {
   const booking = await Booking.findById(bookingId);
