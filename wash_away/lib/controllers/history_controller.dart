@@ -28,7 +28,11 @@ class HistoryController extends GetxController {
 
   void setTabIndex(int index) {
     _selectedTabIndex.value = index;
-    fetchBookings(); // Fetch data based on the new tab
+    // If we don't have bookings yet, fetch them
+    // Otherwise, filtering is done on frontend via filteredBookings getter
+    if (allBookings.isEmpty && !isLoading.value) {
+      fetchBookings();
+    }
   }
 
   Future<void> fetchBookings() async {
@@ -36,30 +40,13 @@ class HistoryController extends GetxController {
       isLoading.value = true;
       error.value = null;
 
-      String? statusFilter;
-      switch (tabs[selectedTabIndex]) {
-        case 'All':
-          statusFilter = null; // Fetch all statuses
-          break;
-        case 'Active':
-          // Fetch active bookings (pending, accepted, on_the_way, arrived, in_progress)
-          statusFilter = 'pending,accepted,on_the_way,arrived,in_progress';
-          break;
-        case 'Completed':
-          statusFilter = 'completed';
-          break;
-        case 'Cancelled':
-          statusFilter = 'cancelled';
-          break;
-      }
+      // Always fetch all bookings and filter on frontend
+      // This ensures Active tab works correctly (backend doesn't support multiple statuses)
+      log('📋 [HistoryController] Fetching all bookings (status: null)');
+      final responseData = await _bookingService.getCustomerBookings(status: null);
+      log('✅ [HistoryController] Fetched ${responseData.length} bookings');
 
-      final responseData = await _bookingService.getCustomerBookings(status: statusFilter);
-
-      if (responseData is List) {
-        allBookings.value = responseData.map((json) => Booking.fromJson(json)).toList();
-      } else {
-        allBookings.clear();
-      }
+      allBookings.value = responseData.map((json) => Booking.fromJson(json)).toList();
     } catch (e) {
       log('Error fetching bookings: $e');
       error.value = 'Failed to load bookings: $e';
@@ -69,6 +56,31 @@ class HistoryController extends GetxController {
     }
   }
 
-  // Filtered bookings based on tab (now handled by API, but keeping for compatibility)
-  List<Booking> get filteredBookings => allBookings;
+  // Filtered bookings based on tab
+  List<Booking> get filteredBookings {
+    final currentTab = tabs[selectedTabIndex];
+    log('🔍 [HistoryController] Filtering bookings for tab: $currentTab (Total: ${allBookings.length})');
+    
+    switch (currentTab) {
+      case 'All':
+        return allBookings.toList();
+      case 'Active':
+        // Filter for active statuses: pending, accepted, on_the_way, arrived, in_progress
+        final activeBookings = allBookings.where((booking) {
+          return booking.status == 'pending' ||
+                 booking.status == 'accepted' ||
+                 booking.status == 'on_the_way' ||
+                 booking.status == 'arrived' ||
+                 booking.status == 'in_progress';
+        }).toList();
+        log('✅ [HistoryController] Found ${activeBookings.length} active bookings');
+        return activeBookings;
+      case 'Completed':
+        return allBookings.where((booking) => booking.status == 'completed').toList();
+      case 'Cancelled':
+        return allBookings.where((booking) => booking.status == 'cancelled').toList();
+      default:
+        return allBookings.toList();
+    }
+  }
 }

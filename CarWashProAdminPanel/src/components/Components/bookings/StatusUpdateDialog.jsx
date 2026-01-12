@@ -79,23 +79,52 @@ export default function StatusUpdateDialog({
           <div className="space-y-2">
             <Label htmlFor="new-status">New Status *</Label>
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger id="new-status">
-                <SelectValue placeholder="Select new status" />
+              <SelectTrigger id="new-status" className="w-full h-11">
+                <SelectValue placeholder="Select new status">
+                  {selectedStatus && (() => {
+                    const selectedOption = statusOptions.find(opt => opt.value === selectedStatus);
+                    if (selectedOption) {
+                      const Icon = selectedOption.icon;
+                      return (
+                        <div className="flex items-center gap-2">
+                          <Icon className={`w-4 h-4 ${selectedOption.color}`} />
+                          <span>{selectedOption.label}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </SelectValue>
               </SelectTrigger>
-              <SelectContent>
-                {availableStatuses.map((option) => {
-                  const Icon = option.icon;
-                  return (
-                    <SelectItem key={option.value} value={option.value}>
-                      <div className="flex items-center gap-2">
-                        <Icon className={`w-4 h-4 ${option.color}`} />
-                        <span>{option.label}</span>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
+              <SelectContent className="w-[var(--radix-select-trigger-width)] max-h-[300px]">
+                {availableStatuses.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-slate-500 text-center">
+                    No other statuses available
+                  </div>
+                ) : (
+                  availableStatuses.map((option) => {
+                    const Icon = option.icon;
+                    return (
+                      <SelectItem 
+                        key={option.value} 
+                        value={option.value}
+                        className="cursor-pointer py-2.5 px-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className={`w-5 h-5 ${option.color} flex-shrink-0`} />
+                          <span className="font-medium">{option.label}</span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })
+                )}
               </SelectContent>
             </Select>
+            {selectedStatus && (
+              <p className="text-xs text-slate-500 mt-1">
+                Selected: {statusOptions.find(opt => opt.value === selectedStatus)?.label}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

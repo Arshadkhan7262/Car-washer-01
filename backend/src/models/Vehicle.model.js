@@ -23,6 +23,10 @@ const vehicleSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  color: {
+    type: String,
+    trim: true
+  },
   is_default: {
     type: Boolean,
     default: false
