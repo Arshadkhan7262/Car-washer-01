@@ -149,9 +149,11 @@ class _BookScreenState extends State<BookScreen> {
               );
             }
 
-            // Display services from API
+            // Display all services from API in a list
+            final allServices = controller.services.toList();
+            
             return Column(
-              children: controller.services.map((service) {
+              children: allServices.map((service) {
                 return Obx(() {
                   final bool isSelected = controller.selectedService.value?.id == service.id;
                   return GestureDetector(
@@ -588,6 +590,58 @@ class _BookScreenState extends State<BookScreen> {
                             ),
                           ),
                           const SizedBox(height: 10),
+                          // Show selected saved address indicator
+                          Obx(() {
+                            if (controller.selectedSavedAddress.value != null) {
+                              final selectedAddress = controller.selectedSavedAddress.value!;
+                              return Container(
+                                padding: const EdgeInsets.all(12),
+                                margin: const EdgeInsets.only(bottom: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade50.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.green.shade300,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.check_circle, color: Colors.green.shade700, size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Using saved address: ${selectedAddress.label}',
+                                            style: GoogleFonts.inter(
+                                              color: Colors.green.shade700,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            selectedAddress.fullAddress,
+                                            style: GoogleFonts.inter(
+                                              color: Theme.of(Get.context!).brightness == Brightness.dark
+                                                  ? DarkTheme.textSecondary
+                                                  : LightTheme.textSecondary,
+                                              fontSize: 11,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          }),
                           Text('OR Enter Address Manually', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness== Brightness.dark? DarkTheme.textSecondary:LightTheme.textSecondary , fontSize: 12)),
                           const SizedBox(height: 10),
                         ],
@@ -831,29 +885,39 @@ class _BookScreenState extends State<BookScreen> {
                       // Get selected service details reactively
                       final selectedService = controller.selectedService.value;
                       final String serviceTitle = selectedService?.name ?? "Service";
-                      final String servicePrice = selectedService != null 
-                          ? "\$${selectedService.basePrice.toStringAsFixed(2)}"
-                          : "\$0.00";
-                      final String totalAmount = servicePrice;
+                      final double subtotal = controller.subtotal;
+                      final double discount = controller.discountAmount.value;
+                      final double finalTotal = controller.finalTotal;
+                      final bool hasDiscount = discount > 0;
                       
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                           Text('Order Summary', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w400)),
+                          Text('Order Summary', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w400)),
                           const SizedBox(height: 15),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(serviceTitle, style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary.withValues(alpha: 0.48): LightTheme.textPrimary.withValues(alpha: 0.48), fontSize: 14,fontWeight: FontWeight.w400)),
-                              Text(servicePrice, style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary.withValues(alpha: 0.48): LightTheme.textPrimary.withValues(alpha: 0.48), fontSize: 14,fontWeight: FontWeight.w400)),
+                              Text("\$${subtotal.toStringAsFixed(2)}", style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary.withValues(alpha: 0.48): LightTheme.textPrimary.withValues(alpha: 0.48), fontSize: 14,fontWeight: FontWeight.w400)),
                             ],
                           ),
+                          if (hasDiscount) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Discount', style: GoogleFonts.inter(color: Colors.green.shade600, fontSize: 14, fontWeight: FontWeight.w400)),
+                                Text("-\$${discount.toStringAsFixed(2)}", style: GoogleFonts.inter(color: Colors.green.shade600, fontSize: 14, fontWeight: FontWeight.w500)),
+                              ],
+                            ),
+                          ],
                           const Divider(color: Colors.white30, height: 30),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                               Text('Total', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w400)),
-                              Text(totalAmount, style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                              Text('Total', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w400)),
+                              Text("\$${finalTotal.toStringAsFixed(2)}", style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ],
@@ -863,38 +927,111 @@ class _BookScreenState extends State<BookScreen> {
 
                   const SizedBox(height: 30),
                   // Apply Coupon Section (payment1.jpeg)
-                   Text('Apply Coupon', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text('Apply Coupon', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: CustomTextField(
-                          controller: TextEditingController(), // Coupon controller - add to BookController if needed
-                          hintText: 'Enter coupon code',
-                          prefixIcon: Icons.discount_outlined,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                  Obx(() {
+                    final hasCoupon = controller.appliedCouponCode.value != null && controller.appliedCouponCode.value!.isNotEmpty;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: CustomTextField(
+                                controller: controller.couponController,
+                                hintText: hasCoupon ? controller.appliedCouponCode.value! : 'Enter coupon code',
+                                prefixIcon: Icons.discount_outlined,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            if (hasCoupon)
+                              ElevatedButton(
+                                onPressed: () => controller.removeCoupon(),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red.shade400,
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: Text('Remove', style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w400)),
+                              )
+                            else
+                              ElevatedButton(
+                                onPressed: controller.isValidatingCoupon.value ? null : () => controller.applyCoupon(),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.card: LightTheme.card,
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    side: BorderSide(
+                                      color: Theme.of(Get.context!).brightness == Brightness.dark 
+                                          ? Colors.white.withValues(alpha: 0.25) 
+                                          : Colors.black.withValues(alpha: 0.25),
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                child: controller.isValidatingCoupon.value
+                                    ? SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                            Theme.of(Get.context!).brightness == Brightness.dark
+                                                ? DarkTheme.textPrimary
+                                                : LightTheme.textPrimary,
+                                          ),
+                                        ),
+                                      )
+                                    : Text('Apply', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w400)),
+                              ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.card: LightTheme.card,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: BorderSide(
-                              color: Theme.of(Get.context!).brightness == Brightness.dark 
-                                  ? Colors.white.withValues(alpha: 0.25) 
-                                  : Colors.black.withValues(alpha: 0.25),
-                              width: 1,
+                        if (controller.couponError.value.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              controller.couponError.value,
+                              style: GoogleFonts.inter(
+                                color: Colors.red,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
-                        ),
-                        child:  Text('Apply', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w400)),
-                      ),
-                    ],
-                  ),
+                        if (hasCoupon)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.green.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.check_circle, color: Colors.green.shade700, size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Coupon "${controller.appliedCouponCode.value ?? 'N/A'}" applied! You saved \$${controller.discountAmount.value.toStringAsFixed(2)}',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.green.shade700,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  }),
 
                   const SizedBox(height: 30),
                   // Payment Method Section (payment1.jpeg and payment2.jpeg)
@@ -908,12 +1045,6 @@ class _BookScreenState extends State<BookScreen> {
 
           // Pay Button (payment2.jpeg)
           Obx(() {
-            // Get selected service details reactively for Pay button
-            final selectedService = controller.selectedService.value;
-            final String totalAmount = selectedService != null 
-                ? "\$${selectedService.basePrice.toStringAsFixed(2)}"
-                : "\$0.00";
-            
             return Padding(
               padding: const EdgeInsets.only(top: 10.0),
               child: Center(
@@ -926,7 +1057,7 @@ class _BookScreenState extends State<BookScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text('Pay $totalAmount',
+                    child: Text('Pay \$${controller.finalTotal.toStringAsFixed(2)}',
                         style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                 ),

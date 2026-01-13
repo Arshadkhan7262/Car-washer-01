@@ -271,18 +271,18 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
     return '$weekday, $month $day';
   }
 
-  /// Get total price - matches booking confirmation screen logic
+  /// Get total price - matches booking confirmation screen logic (includes coupon discount)
   String _getTotalPrice(Map<String, dynamic> data) {
-    // PRIMARY: Get from BookController (same as booking confirmation screen)
-    // This works because user navigates from booking confirmation, so controller still has the service
+    // PRIMARY: Get from BookController's finalTotal (includes coupon discount)
+    // This works because user navigates from booking confirmation, so controller still has the service and coupon
     final BookController? bookController = Get.isRegistered<BookController>() 
         ? Get.find<BookController>() 
         : null;
     
-    if (bookController?.selectedService.value != null) {
-      final price = bookController!.selectedService.value!.basePrice;
-      if (price > 0.0) {
-        return '\$${price.toStringAsFixed(2)}';
+    if (bookController != null) {
+      final finalTotal = bookController.finalTotal;
+      if (finalTotal > 0.0) {
+        return '\$${finalTotal.toStringAsFixed(2)}';
       }
     }
     
@@ -299,7 +299,7 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
       }
     }
     
-    // FALLBACK: Get from API response total
+    // FALLBACK: Get from API response total (this should already include discount if coupon was applied)
     final total = data['total'] ?? 
                 data['total_amount'] ?? 
                 data['price'] ?? 

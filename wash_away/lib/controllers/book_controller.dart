@@ -12,6 +12,7 @@ import '../features/vehicles/services/vehicle_type_service.dart';
 // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 // import '../features/bookings/services/draft_booking_service.dart';
 import '../features/bookings/services/booking_service.dart';
+import '../features/bookings/services/coupon_service.dart';
 import '../features/addresses/services/address_service.dart';
 import '../features/vehicles/services/vehicle_service.dart';
 
@@ -71,6 +72,7 @@ class BookController extends GetxController {
   // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
   // final DraftBookingService _draftBookingService = DraftBookingService();
   final BookingService _bookingService = BookingService();
+  final CouponService _couponService = CouponService();
   final AddressService _addressService = AddressService();
   final VehicleService _vehicleService = VehicleService();
   
@@ -117,11 +119,18 @@ class BookController extends GetxController {
   final RxString selectedTime = ''.obs;
   final TextEditingController addressController = TextEditingController();
   final TextEditingController additionalLocationController = TextEditingController();
+  final TextEditingController couponController = TextEditingController();
   final RxString selectedPaymentMethod = 'Credit Card'.obs;
   
   // Selected saved address and vehicle
   final Rx<Address?> selectedSavedAddress = Rx<Address?>(null);
   final Rx<AddVehicleModel?> selectedSavedVehicle = Rx<AddVehicleModel?>(null);
+  
+  // Coupon state
+  final Rx<String?> appliedCouponCode = Rx<String?>(null);
+  final RxDouble discountAmount = 0.0.obs;
+  final RxBool isValidatingCoupon = false.obs;
+  final RxString couponError = ''.obs;
 
   // Validation
   bool get isStage2Complete => selectedVehicleType.value != null || selectedVehicle.value != null;
@@ -153,8 +162,26 @@ class BookController extends GetxController {
     _pageController ??= PageController(initialPage: currentPage.value);
     
     // Always initialize listeners (needed for UI updates)
-    addressController.addListener(_updateState);
+    addressController.addListener(() {
+      _updateState();
+      // Clear saved address selection if user manually edits the address field
+      // (but only if the text doesn't match the selected saved address)
+      if (selectedSavedAddress.value != null) {
+        final savedAddressText = selectedSavedAddress.value!.fullAddress;
+        final currentText = addressController.text.trim();
+        // If user manually edited and it's different from saved address, clear selection
+        if (currentText.isNotEmpty && currentText != savedAddressText) {
+          selectedSavedAddress.value = null;
+        }
+      }
+    });
     additionalLocationController.addListener(_updateState);
+    couponController.addListener(() {
+      // Clear coupon error when user types
+      if (couponError.value.isNotEmpty) {
+        couponError.value = '';
+      }
+    });
     
     // Fetch services and vehicle types from API
     fetchServices();
@@ -477,12 +504,116 @@ class BookController extends GetxController {
     _pageController?.dispose();
     _pageController = null;
     addressController.dispose();
-    additionalLocationController.dispose(); // Dispose new controller
+    additionalLocationController.dispose();
+    couponController.dispose();
     super.onClose();
   }
 
   void _updateState() {
     update(); // Trigger rebuild for button enablement
+  }
+
+  /// Get subtotal (base price)
+  double get subtotal {
+    if (selectedService.value != null) {
+      // Check if there's vehicle-specific pricing
+      final vehicleType = selectedVehicleType.value?.name.toLowerCase();
+      if (vehicleType != null && 
+          selectedService.value!.pricing != null && 
+          selectedService.value!.pricing!.containsKey(vehicleType)) {
+        final vehiclePrice = selectedService.value!.pricing![vehicleType];
+        if (vehiclePrice != null && vehiclePrice > 0) {
+          return vehiclePrice;
+        }
+      }
+      return selectedService.value!.basePrice;
+    }
+    return 0.0;
+  }
+
+  /// Get final total after discount
+  double get finalTotal {
+    return (subtotal - discountAmount.value).clamp(0.0, double.infinity);
+  }
+
+  /// Apply coupon code
+  Future<void> applyCoupon() async {
+    final code = couponController.text.trim().toUpperCase();
+    
+    if (code.isEmpty) {
+      couponError.value = 'Please enter a coupon code';
+      Get.snackbar(
+        'Error',
+        'Please enter a coupon code',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+
+    if (selectedService.value == null) {
+      couponError.value = 'Please select a service first';
+      Get.snackbar(
+        'Error',
+        'Please select a service first',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+
+    try {
+      isValidatingCoupon.value = true;
+      couponError.value = '';
+
+      final orderValue = subtotal;
+      final couponData = await _couponService.validateCoupon(
+        code: code,
+        orderValue: orderValue,
+      );
+
+      // Update coupon state
+      appliedCouponCode.value = couponData['coupon']['code'] as String;
+      discountAmount.value = (couponData['discount'] as num).toDouble();
+      
+      Get.snackbar(
+        'Success',
+        'Coupon applied! You saved \$${discountAmount.value.toStringAsFixed(2)}',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 2),
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      couponError.value = e.toString().replaceAll('Exception: ', '');
+      appliedCouponCode.value = null;
+      discountAmount.value = 0.0;
+      
+      Get.snackbar(
+        'Error',
+        couponError.value,
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isValidatingCoupon.value = false;
+    }
+  }
+
+  /// Remove applied coupon
+  void removeCoupon() {
+    appliedCouponCode.value = null;
+    discountAmount.value = 0.0;
+    couponController.clear();
+    couponError.value = '';
+    Get.snackbar(
+      'Info',
+      'Coupon removed',
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 1),
+    );
   }
 
   void navigateToNextPage(BuildContext context) async {
@@ -611,6 +742,8 @@ class BookController extends GetxController {
       }
 
       // Use saved address/vehicle if selected, otherwise use manual input
+      // IMPORTANT: When a saved address is selected, use its full address and coordinates
+      // This ensures the washer receives the exact saved address with proper coordinates
       String bookingAddress = addressController.text.trim();
       double? addressLatitude;
       double? addressLongitude;
@@ -618,10 +751,15 @@ class BookController extends GetxController {
       String? vehicleId;
       
       if (selectedSavedAddress.value != null) {
+        // Use the saved address data (full address + coordinates)
+        // This is the specific address the customer selected, which will be sent to the washer
         bookingAddress = selectedSavedAddress.value!.fullAddress;
         addressLatitude = selectedSavedAddress.value!.latitude;
         addressLongitude = selectedSavedAddress.value!.longitude;
         addressId = selectedSavedAddress.value!.id;
+        print('📍 [createBooking] Using saved address: ${selectedSavedAddress.value!.label} - $bookingAddress (lat: $addressLatitude, lng: $addressLongitude)');
+      } else {
+        print('📍 [createBooking] Using manually entered address: $bookingAddress');
       }
       
       if (selectedSavedVehicle.value != null) {
@@ -643,6 +781,7 @@ class BookController extends GetxController {
             ? additionalLocationController.text.trim() 
             : null,
         paymentMethod: paymentMethod,
+        couponCode: appliedCouponCode.value?.isNotEmpty == true ? appliedCouponCode.value : null,
       );
 
       // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT

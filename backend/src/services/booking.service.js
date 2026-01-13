@@ -4,6 +4,7 @@ import User from '../models/User.model.js';
 import Service from '../models/Service.model.js';
 import Washer from '../models/Washer.model.js';
 import AppError from '../errors/AppError.js';
+import * as couponService from './coupon.service.js';
 
 /**
  * Generate unique booking ID
@@ -161,9 +162,33 @@ export const createBooking = async (bookingData) => {
   const bookingId = await generateBookingId();
 
   // Calculate price based on vehicle type
-  let price = service.base_price;
+  let subtotal = service.base_price;
   if (service.pricing && service.pricing.get(bookingData.vehicle_type)) {
-    price = service.pricing.get(bookingData.vehicle_type);
+    subtotal = service.pricing.get(bookingData.vehicle_type);
+  }
+
+  // Handle coupon if provided
+  let couponCode = null;
+  let discount = 0;
+  let total = subtotal;
+
+  if (bookingData.coupon_code) {
+    try {
+      const couponResult = await couponService.validateCoupon(
+        bookingData.coupon_code,
+        subtotal
+      );
+      
+      couponCode = couponResult.coupon.code;
+      discount = couponResult.discount;
+      total = couponResult.total;
+
+      // Increment coupon usage
+      await couponService.incrementCouponUsage(couponResult.coupon.id);
+    } catch (error) {
+      // If coupon validation fails, throw error
+      throw new AppError(error.message || 'Invalid coupon code', error.statusCode || 400);
+    }
   }
 
   // Create booking
@@ -180,10 +205,15 @@ export const createBooking = async (bookingData) => {
     time_slot: bookingData.time_slot,
     address: bookingData.address,
     additional_location: bookingData.additional_location || null,
+    address_latitude: bookingData.address_latitude || null,
+    address_longitude: bookingData.address_longitude || null,
     status: bookingData.status || 'pending',
     payment_status: bookingData.payment_status || 'unpaid',
     payment_method: bookingData.payment_method || 'cash',
-    total: price,
+    subtotal: subtotal,
+    coupon_code: couponCode,
+    discount: discount,
+    total: total,
     washer_id: bookingData.washer_id || null,
     washer_name: bookingData.washer_name || null,
     timeline: [{

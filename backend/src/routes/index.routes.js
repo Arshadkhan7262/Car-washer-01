@@ -8,6 +8,7 @@ import bookingRoutes from './booking.routes.js';
 import serviceRoutes from './service.routes.js';
 import customerRoutes from './customer.routes.js';
 import washerRoutes from './washer.routes.js';
+import couponRoutes from './coupon.routes.js';
 
 // Washer App Screen-specific routes
 import washerHomeRoutes from './washerHome.routes.js';
@@ -38,6 +39,7 @@ router.use('/admin/bookings', bookingRoutes);
 router.use('/admin/services', serviceRoutes);
 router.use('/admin/customers', customerRoutes);
 router.use('/admin/washers', washerRoutes);
+router.use('/admin/coupons', couponRoutes);
 
 // Washer App Screen-specific API routes
 router.use('/washer/home', washerHomeRoutes); // Home screen: dashboard stats
@@ -62,6 +64,8 @@ router.use('/customer/bookings', customerBookingRoutes); // Bookings: customer b
 // router.use('/customer/bookings/draft', draftBookingRoutes); // Draft bookings: save/load booking progress
 router.use('/customer/addresses', customerAddressRoutes); // Addresses: customer address management
 router.use('/customer/vehicles', customerVehicleRoutes); // Vehicles: customer vehicle management
+import customerCouponRoutes from './customerCoupon.routes.js';
+router.use('/customer/coupons', customerCouponRoutes); // Coupons: customer coupon validation
 
 // Admin Vehicle Type routes
 import vehicleTypeRoutes from './vehicleType.routes.js';

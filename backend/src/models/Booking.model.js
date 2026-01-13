@@ -80,6 +80,19 @@ const bookingSchema = new mongoose.Schema({
     enum: ['cash', 'card', 'wallet', 'apple_pay', 'google_pay'],
     default: 'cash'
   },
+  subtotal: {
+    type: Number,
+    default: 0
+  },
+  coupon_code: {
+    type: String,
+    trim: true,
+    uppercase: true
+  },
+  discount: {
+    type: Number,
+    default: 0
+  },
   total: {
     type: Number,
     required: true,

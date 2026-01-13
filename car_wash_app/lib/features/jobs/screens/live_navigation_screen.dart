@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 import '../../../theme/app_colors.dart';
 
 class LiveNavigationScreen extends StatefulWidget {
@@ -37,11 +39,15 @@ class _LiveNavigationScreenState extends State<LiveNavigationScreen> {
   @override
   void initState() {
     super.initState();
-    _parseCustomerLocation();
-    _initializeLocationTracking();
+    _initializeLocation();
   }
 
-  void _parseCustomerLocation() {
+  Future<void> _initializeLocation() async {
+    await _parseCustomerLocation();
+    await _initializeLocationTracking();
+  }
+
+  Future<void> _parseCustomerLocation() async {
     try {
       // First try to use provided latitude/longitude
       if (widget.customerLatitude != null && widget.customerLongitude != null) {
@@ -61,21 +67,127 @@ class _LiveNavigationScreenState extends State<LiveNavigationScreen> {
           setState(() {
             _customerLocation = LatLng(lat, lng);
           });
-        } else {
-          setState(() {
-            _errorMessage = 'Location coordinates not available. Please ensure GPS is enabled when booking.';
-            _isLoading = false;
-          });
+          return;
         }
+      }
+      
+      // If coordinates not available, geocode the address
+      await _geocodeAddress(widget.customerAddress);
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error parsing location: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Geocode address text to get coordinates
+  Future<void> _geocodeAddress(String address) async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      // Use OpenStreetMap Nominatim API (free, no API key required)
+      final encodedAddress = Uri.encodeComponent(address);
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?q=$encodedAddress&format=json&limit=1'
+      );
+
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Geocoding request timed out');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        if (data is List && data.isNotEmpty) {
+          final result = data[0];
+          final lat = double.tryParse(result['lat']?.toString() ?? '0');
+          final lng = double.tryParse(result['lon']?.toString() ?? '0');
+          
+          if (lat != null && lng != null && lat != 0 && lng != 0) {
+            setState(() {
+              _customerLocation = LatLng(lat, lng);
+              _isLoading = false;
+            });
+            return;
+          }
+        }
+        
+        // If geocoding fails, try to geocode just the city name
+        await _geocodeCityName(address);
+      } else {
+        // If API fails, try to extract city name and geocode that
+        await _geocodeCityName(address);
+      }
+    } catch (e) {
+      // If geocoding fails, try to extract city name and geocode that
+      await _geocodeCityName(address);
+    }
+  }
+
+  /// Try to geocode just the city name from the address
+  Future<void> _geocodeCityName(String address) async {
+    try {
+      // Extract city name (usually first part before comma)
+      final cityName = address.split(',').first.trim();
+      
+      if (cityName.isEmpty) {
+        throw Exception('Could not extract city name from address');
+      }
+
+      final encodedCity = Uri.encodeComponent(cityName);
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?q=$encodedCity&format=json&limit=1'
+      );
+
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'CarWashApp/1.0', // Required by Nominatim
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Geocoding request timed out');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        if (data is List && data.isNotEmpty) {
+          final result = data[0];
+          final lat = double.tryParse(result['lat']?.toString() ?? '0');
+          final lng = double.tryParse(result['lon']?.toString() ?? '0');
+          
+          if (lat != null && lng != null && lat != 0 && lng != 0) {
+            setState(() {
+              _customerLocation = LatLng(lat, lng);
+              _isLoading = false;
+            });
+            return;
+          }
+        }
+        
+        setState(() {
+          _errorMessage = 'Could not find location for address: $address. Please check the address and try again.';
+          _isLoading = false;
+        });
       } else {
         setState(() {
-          _errorMessage = 'Location coordinates not available. Please ensure GPS is enabled when booking.';
+          _errorMessage = 'Could not geocode address. Please ensure the address is correct.';
           _isLoading = false;
         });
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Error parsing location: $e';
+        _errorMessage = 'Could not find location. Please check the address: $address';
         _isLoading = false;
       });
     }

@@ -320,11 +320,16 @@ export default function Services() {
 
       {/* Service Modal */}
       <Dialog open={showServiceModal} onOpenChange={closeServiceModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingService ? 'Edit Service' : 'Add New Service'}</DialogTitle>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0 pb-4 border-b">
+            <DialogTitle className="text-xl font-semibold">
+              {editingService ? 'Edit Service' : 'Add New Service'}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-6">
+          
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto px-1 py-4">
+            <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-2">
                 <Label>Service Name</Label>
@@ -426,11 +431,20 @@ export default function Services() {
                 <Label>Active</Label>
               </div>
             </div>
+            </div>
           </div>
-          <DialogFooter>
+          
+          {/* Fixed Footer */}
+          <DialogFooter className="flex-shrink-0 pt-4 border-t mt-4">
             <Button variant="outline" onClick={closeServiceModal}>Cancel</Button>
-            <Button onClick={() => serviceMutation.mutate(serviceForm)}>
-              {editingService ? 'Save Changes' : 'Add Service'}
+            <Button 
+              onClick={() => serviceMutation.mutate(serviceForm)}
+              disabled={serviceMutation.isPending}
+            >
+              {serviceMutation.isPending 
+                ? (editingService ? 'Saving...' : 'Adding...') 
+                : (editingService ? 'Save Changes' : 'Add Service')
+              }
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -188,12 +188,12 @@ Get.offAll(DashboardScreen());                },
         ? '#${bookingId.substring(bookingId.length - 8).toUpperCase()}'
         : '#${bookingId.toUpperCase()}';
     
-    // Extract total amount - PRIMARY: from controller (same as Pay button), FALLBACK: from API
+    // Extract total amount - PRIMARY: from controller (with coupon discount), FALLBACK: from API
     double totalAmount = 0.0;
     
-    // PRIMARY: Get from controller's selected service (same calculation as Pay button)
-    if (bookController?.selectedService.value != null) {
-      totalAmount = bookController!.selectedService.value!.basePrice;
+    // PRIMARY: Get from controller's finalTotal (includes coupon discount)
+    if (bookController != null) {
+      totalAmount = bookController.finalTotal;
     }
     
     // FALLBACK: Get from API response if controller doesn't have it

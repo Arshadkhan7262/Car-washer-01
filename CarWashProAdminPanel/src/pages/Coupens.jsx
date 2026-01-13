@@ -293,107 +293,204 @@ export default function Coupons() {
 
       {/* Create/Edit Modal */}
       <Dialog open={showModal} onOpenChange={closeModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Edit Coupon' : 'Create New Coupon'}</DialogTitle>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0 pb-4 border-b">
+            <DialogTitle className="text-xl font-semibold">
+              {editing ? 'Edit Coupon' : 'Create New Coupon'}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Coupon Code</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                  placeholder="SUMMER20"
-                  className="font-mono"
-                />
-                <Button type="button" variant="outline" onClick={generateCode}>
-                  Generate
-                </Button>
+          
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto px-1 py-4">
+            <div className="space-y-6">
+              {/* Basic Information Section */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                  Basic Information
+                </h3>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Coupon Code *</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={form.code}
+                        onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                        placeholder="SUMMER20"
+                        className="font-mono flex-1"
+                      />
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={generateCode}
+                        className="whitespace-nowrap"
+                      >
+                        Generate
+                      </Button>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Enter a unique code or generate one automatically
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Description</Label>
+                    <Input
+                      value={form.description}
+                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      placeholder="Summer sale discount"
+                    />
+                    <p className="text-xs text-slate-500">
+                      Optional description for internal reference
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Input
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Summer sale discount"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Discount Type</Label>
-                <Select
-                  value={form.discount_type}
-                  onValueChange={(v) => setForm({ ...form, discount_type: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percentage">Percentage (%)</SelectItem>
-                    <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              {/* Discount Configuration Section */}
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                  Discount Configuration
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Discount Type *</Label>
+                    <Select
+                      value={form.discount_type}
+                      onValueChange={(v) => setForm({ ...form, discount_type: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Percentage (%)</SelectItem>
+                        <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">
+                      Discount Value * 
+                      {form.discount_type === 'percentage' && ' (0-100%)'}
+                    </Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max={form.discount_type === 'percentage' ? '100' : undefined}
+                      step={form.discount_type === 'percentage' ? '0.1' : '0.01'}
+                      value={form.discount_value}
+                      onChange={(e) => setForm({ ...form, discount_value: parseFloat(e.target.value) || 0 })}
+                      placeholder={form.discount_type === 'percentage' ? '10' : '5.00'}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Discount Value</Label>
-                <Input
-                  type="number"
-                  value={form.discount_value}
-                  onChange={(e) => setForm({ ...form, discount_value: parseFloat(e.target.value) })}
-                />
+
+              {/* Conditions Section */}
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                  Conditions & Limits
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Min. Order Value ($)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.min_order_value}
+                      onChange={(e) => setForm({ ...form, min_order_value: parseFloat(e.target.value) || 0 })}
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-slate-500">
+                      Minimum order amount required (0 = no minimum)
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Max. Discount ($)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.max_discount}
+                      onChange={(e) => setForm({ ...form, max_discount: parseFloat(e.target.value) || 0 })}
+                      placeholder="0 = no limit"
+                    />
+                    <p className="text-xs text-slate-500">
+                      Maximum discount amount (0 = unlimited)
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Min. Order Value ($)</Label>
-                <Input
-                  type="number"
-                  value={form.min_order_value}
-                  onChange={(e) => setForm({ ...form, min_order_value: parseFloat(e.target.value) })}
-                />
+
+              {/* Validity Section */}
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                  Validity & Usage
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Expiry Date</Label>
+                    <Input
+                      type="date"
+                      value={form.expiry_date}
+                      onChange={(e) => setForm({ ...form, expiry_date: e.target.value })}
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                    <p className="text-xs text-slate-500">
+                      Leave empty for no expiration
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Usage Limit</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={form.usage_limit}
+                      onChange={(e) => setForm({ ...form, usage_limit: parseInt(e.target.value) || 100 })}
+                      placeholder="100"
+                    />
+                    <p className="text-xs text-slate-500">
+                      Maximum number of times this coupon can be used
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Max. Discount ($)</Label>
-                <Input
-                  type="number"
-                  value={form.max_discount}
-                  onChange={(e) => setForm({ ...form, max_discount: parseFloat(e.target.value) })}
-                  placeholder="0 = no limit"
-                />
+
+              {/* Status Section */}
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                  Status
+                </h3>
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                  <Switch
+                    checked={form.is_active}
+                    onCheckedChange={(v) => setForm({ ...form, is_active: v })}
+                  />
+                  <div className="flex-1">
+                    <Label className="text-sm font-medium cursor-pointer">
+                      Active
+                    </Label>
+                    <p className="text-xs text-slate-500">
+                      Only active coupons can be used by customers
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Expiry Date</Label>
-                <Input
-                  type="date"
-                  value={form.expiry_date}
-                  onChange={(e) => setForm({ ...form, expiry_date: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Usage Limit</Label>
-                <Input
-                  type="number"
-                  value={form.usage_limit}
-                  onChange={(e) => setForm({ ...form, usage_limit: parseInt(e.target.value) })}
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Switch
-                checked={form.is_active}
-                onCheckedChange={(v) => setForm({ ...form, is_active: v })}
-              />
-              <Label>Active</Label>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button onClick={() => createMutation.mutate(form)}>
-              {editing ? 'Save Changes' : 'Create Coupon'}
+
+          {/* Fixed Footer */}
+          <DialogFooter className="flex-shrink-0 pt-4 border-t mt-4">
+            <Button variant="outline" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => createMutation.mutate(form)}
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending 
+                ? (editing ? 'Saving...' : 'Creating...') 
+                : (editing ? 'Save Changes' : 'Create Coupon')
+              }
             </Button>
           </DialogFooter>
         </DialogContent>

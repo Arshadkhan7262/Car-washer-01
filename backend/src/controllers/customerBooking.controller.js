@@ -108,9 +108,11 @@ export const createBooking = async (req, res, next) => {
       address: additional_location ? `${address}, ${additional_location}` : address,
       address_latitude: address_latitude || null,
       address_longitude: address_longitude || null,
+      additional_location: additional_location || null,
       payment_method: payment_method || 'cash',
       payment_status: paymentStatus,
-      status: 'pending'
+      status: 'pending',
+      coupon_code: coupon_code || null
     };
 
     const booking = await bookingService.createBooking(bookingData);
@@ -266,6 +268,8 @@ export const trackBooking = async (req, res, next) => {
       booking_date: booking.booking_date,
       time_slot: booking.time_slot,
       address: booking.address,
+      address_latitude: booking.address_latitude || null,
+      address_longitude: booking.address_longitude || null,
       service_name: booking.service_name,
       vehicle_type: booking.vehicle_type,
       total: booking.total,
