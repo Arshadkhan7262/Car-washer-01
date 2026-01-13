@@ -56,6 +56,8 @@ export const createBooking = async (req, res, next) => {
       booking_date,
       time_slot,
       address,
+      address_latitude,
+      address_longitude,
       additional_location,
       payment_method,
       coupon_code
@@ -104,6 +106,8 @@ export const createBooking = async (req, res, next) => {
       booking_date,
       time_slot,
       address: additional_location ? `${address}, ${additional_location}` : address,
+      address_latitude: address_latitude || null,
+      address_longitude: address_longitude || null,
       payment_method: payment_method || 'cash',
       payment_status: paymentStatus,
       status: 'pending'

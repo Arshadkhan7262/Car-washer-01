@@ -21,6 +21,8 @@ class JobDetailController extends GetxController {
     totalPrice: 0.0,
     paymentMethod: "",
     address: "",
+    addressLatitude: null,
+    addressLongitude: null,
     currentStep: JobStep.assigned,
   ).obs;
   
@@ -146,6 +148,22 @@ class JobDetailController extends GetxController {
     // Get payment method
     String paymentMethod = job['payment_method']?.toString().toUpperCase() ?? 'CASH';
 
+    // Extract latitude and longitude from booking data
+    double? addressLatitude;
+    double? addressLongitude;
+    
+    if (job['address_latitude'] != null) {
+      addressLatitude = (job['address_latitude'] is num) 
+          ? job['address_latitude'].toDouble() 
+          : double.tryParse(job['address_latitude'].toString());
+    }
+    
+    if (job['address_longitude'] != null) {
+      addressLongitude = (job['address_longitude'] is num) 
+          ? job['address_longitude'].toDouble() 
+          : double.tryParse(job['address_longitude'].toString());
+    }
+
     return JobDetailModel(
       bookingId: job['booking_id']?.toString() ?? job['_id']?.toString() ?? '',
       schedule: schedule,
@@ -158,6 +176,8 @@ class JobDetailController extends GetxController {
       totalPrice: (job['total'] ?? job['base_price'] ?? 0.0).toDouble(),
       paymentMethod: paymentMethod,
       address: job['address']?.toString() ?? 'Address not provided',
+      addressLatitude: addressLatitude,
+      addressLongitude: addressLongitude,
       currentStep: currentStep,
     );
   }
@@ -205,6 +225,8 @@ class JobDetailController extends GetxController {
         totalPrice: currentJobDetail.totalPrice,
         paymentMethod: currentJobDetail.paymentMethod,
         address: currentJobDetail.address,
+        addressLatitude: currentJobDetail.addressLatitude,
+        addressLongitude: currentJobDetail.addressLongitude,
         currentStep: nextStep,
       );
 
@@ -269,6 +291,8 @@ class JobDetailController extends GetxController {
         totalPrice: currentJobDetail.totalPrice,
         paymentMethod: currentJobDetail.paymentMethod,
         address: currentJobDetail.address,
+        addressLatitude: currentJobDetail.addressLatitude,
+        addressLongitude: currentJobDetail.addressLongitude,
         currentStep: JobStep.completed,
       );
 

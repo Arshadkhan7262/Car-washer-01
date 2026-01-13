@@ -10,11 +10,15 @@ import '../../../theme/app_colors.dart';
 class LiveNavigationScreen extends StatefulWidget {
   final String customerAddress;
   final String customerName;
+  final double? customerLatitude;
+  final double? customerLongitude;
 
   const LiveNavigationScreen({
     super.key,
     required this.customerAddress,
     required this.customerName,
+    this.customerLatitude,
+    this.customerLongitude,
   });
 
   @override
@@ -39,7 +43,15 @@ class _LiveNavigationScreenState extends State<LiveNavigationScreen> {
 
   void _parseCustomerLocation() {
     try {
-      // Address format: "31.4140064, 73.071362, cgggg"
+      // First try to use provided latitude/longitude
+      if (widget.customerLatitude != null && widget.customerLongitude != null) {
+        setState(() {
+          _customerLocation = LatLng(widget.customerLatitude!, widget.customerLongitude!);
+        });
+        return;
+      }
+      
+      // Fallback: Try to parse from address string format: "31.4140064, 73.071362, ..."
       final parts = widget.customerAddress.split(',');
       if (parts.length >= 2) {
         final lat = double.tryParse(parts[0].trim());
@@ -51,13 +63,13 @@ class _LiveNavigationScreenState extends State<LiveNavigationScreen> {
           });
         } else {
           setState(() {
-            _errorMessage = 'Invalid location coordinates';
+            _errorMessage = 'Location coordinates not available. Please ensure GPS is enabled when booking.';
             _isLoading = false;
           });
         }
       } else {
         setState(() {
-          _errorMessage = 'Invalid address format';
+          _errorMessage = 'Location coordinates not available. Please ensure GPS is enabled when booking.';
           _isLoading = false;
         });
       }

@@ -12,6 +12,8 @@ class JobDetailModel {
   final double totalPrice;
   final String paymentMethod;
   final String address;
+  final double? addressLatitude;
+  final double? addressLongitude;
   final JobStep currentStep;
 
   JobDetailModel({
@@ -26,6 +28,8 @@ class JobDetailModel {
     required this.totalPrice,
     required this.paymentMethod,
     required this.address,
+    this.addressLatitude,
+    this.addressLongitude,
     required this.currentStep,
   });
 }

@@ -554,6 +554,8 @@ class JobDetailScreen extends StatelessWidget {
             Get.to(() => LiveNavigationScreen(
               customerAddress: controller.jobDetail.value.address,
               customerName: controller.jobDetail.value.customerName,
+              customerLatitude: controller.jobDetail.value.addressLatitude,
+              customerLongitude: controller.jobDetail.value.addressLongitude,
             ));
           },
           icon: const Icon(Icons.near_me_outlined, size: 18),
