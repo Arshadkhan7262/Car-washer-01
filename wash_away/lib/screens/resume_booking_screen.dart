@@ -69,17 +69,46 @@ class ResumeBookingScreen extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
+                    print('🔄 [ResumeBooking] Starting resume flow...');
+                    
+                    // Set static flag BEFORE creating controller to prevent onInit interference
+                    BookController.setWillResume(true);
+                    
                     // Load draft and navigate to booking screen
                     // Use Get.find if controller exists, otherwise create
                     BookController bookController;
                     if (Get.isRegistered<BookController>()) {
                       bookController = Get.find<BookController>();
-                      // Reset controller state for fresh start
-                      bookController.resetPageController();
+                      print('🔄 [ResumeBooking] Using existing controller');
                     } else {
                       bookController = Get.put(BookController(), permanent: false);
+                      print('🔄 [ResumeBooking] Created new controller');
                     }
-                    await bookController.loadDraftBooking();
+                    
+                    // Set instance resuming flag
+                    bookController.isResuming = true;
+                    
+                    // IMPORTANT: Ensure services and vehicle types are loaded before loading draft
+                    print('🔄 [ResumeBooking] Fetching services and vehicle types...');
+                    await bookController.fetchServices();
+                    await bookController.fetchVehicleTypes();
+                    
+                    // Load saved addresses and vehicles (needed for stage 3)
+                    print('🔄 [ResumeBooking] Fetching addresses and vehicles...');
+                    await bookController.fetchSavedAddresses();
+                    await bookController.fetchSavedVehicles();
+                    
+                    // Now load the draft (which will restore selections and set currentPage)
+                    // Skip PageController reset here - it will be handled when BookScreen builds
+                    print('🔄 [ResumeBooking] Loading draft...');
+                    await bookController.loadDraftBooking(skipPageControllerReset: true);
+                    
+                    // Reset PageController AFTER draft is loaded so it uses the correct initialPage
+                    // This ensures the new PageController will be created with the correct initialPage
+                    print('🔄 [ResumeBooking] Resetting PageController. Current page: ${bookController.currentPage.value}');
+                    bookController.resetPageController();
+                    
+                    print('🔄 [ResumeBooking] Navigating to BookScreen...');
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(

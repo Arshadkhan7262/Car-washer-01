@@ -23,6 +23,7 @@ class HomeController extends GetxController {
   final PageController pageController = PageController();
   final RxInt currentPage = 0.obs;
   Timer? autoSlideTimer;
+  VoidCallback? _pageControllerListener;
 
   // Services state
   final ServiceService _serviceService = ServiceService();
@@ -44,17 +45,26 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    pageController.addListener(() {
+    // Store listener reference for proper cleanup
+    _pageControllerListener = () {
       currentPage.value = pageController.page?.round() ?? 0;
-    });
+    };
+    pageController.addListener(_pageControllerListener!);
 
-    autoSlideTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      final nextPage = (currentPage.value + 1) % 3;
-      pageController.animateToPage(
-        nextPage,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-      );
+    // Delay timer start until PageView is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Start auto-slide timer only after PageView is attached
+      autoSlideTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+        // Check if PageController is attached before animating
+        if (pageController.hasClients) {
+          final nextPage = (currentPage.value + 1) % 3;
+          pageController.animateToPage(
+            nextPage,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeInOut,
+          );
+        }
+      });
     });
 
     // Fetch services and vehicle types on init
@@ -68,7 +78,16 @@ class HomeController extends GetxController {
   @override
   void onClose() {
     autoSlideTimer?.cancel();
-    pageController.dispose();
+    autoSlideTimer = null;
+    // Remove listener before disposing
+    if (_pageControllerListener != null) {
+      pageController.removeListener(_pageControllerListener!);
+      _pageControllerListener = null;
+    }
+    // Safely dispose PageController
+    if (pageController.hasClients) {
+      pageController.dispose();
+    }
     super.onClose();
   }
 
@@ -124,7 +143,27 @@ class HomeController extends GetxController {
       isLoadingLocation.value = true;
       print('📍 [Location] Starting location fetch...');
       
-      // Check permission first
+      // FIRST: Check if location services are enabled on the device
+      bool serviceEnabled = await _locationService.isLocationServiceEnabled();
+      print('📍 [Location] Location service enabled: $serviceEnabled');
+      
+      if (!serviceEnabled) {
+        // Location services are disabled
+        currentLocation.value = 'Current Location';
+        isLoadingLocation.value = false;
+        print('📍 [Location] Location services disabled');
+        Get.snackbar(
+          'Location Disabled',
+          'Turn on the device location',
+          snackPosition: SnackPosition.BOTTOM,
+          duration: const Duration(seconds: 3),
+          backgroundColor: Colors.orange.shade100,
+          colorText: Colors.orange.shade900,
+        );
+        return;
+      }
+      
+      // SECOND: Check permission
       LocationPermission permission = await _locationService.checkPermission();
       print('📍 [Location] Permission status: $permission');
       
@@ -160,14 +199,14 @@ class HomeController extends GetxController {
         return;
       }
 
-      // Get location place name (city/locality)
+      // Get location place name (city/locality) - e.g., "Sant Pora"
       print('📍 [Location] Fetching place name...');
       String? placeName = await _locationService.getCurrentLocationPlaceName();
       print('📍 [Location] Place name received: $placeName');
       
       if (placeName != null && placeName.isNotEmpty) {
         print('📍 [Location] Updating location to: $placeName');
-        currentLocation.value = placeName;
+        currentLocation.value = placeName; // Will show "Sant Pora" or actual location
       } else {
         print('📍 [Location] No place name found, using default');
         currentLocation.value = 'Current Location';

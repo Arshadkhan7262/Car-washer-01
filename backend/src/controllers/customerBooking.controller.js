@@ -164,13 +164,14 @@ export const getCustomerBookingById = async (req, res, next) => {
     const { id } = req.params;
     const customerId = req.customer._id;
 
-    if (!id || id === ':id' || !/^[0-9a-fA-F]{24}$/.test(id)) {
+    if (!id || id === ':id') {
       return res.status(400).json({
         success: false,
-        message: 'Invalid booking ID format.'
+        message: 'Booking ID is required.'
       });
     }
 
+    // Let getBookingById handle both ObjectId and human-readable booking_id formats
     const booking = await bookingService.getBookingById(id);
 
     // Verify booking belongs to customer
@@ -200,13 +201,14 @@ export const trackBooking = async (req, res, next) => {
     const { id } = req.params;
     const customerId = req.customer._id;
 
-    if (!id || id === ':id' || !/^[0-9a-fA-F]{24}$/.test(id)) {
+    if (!id || id === ':id') {
       return res.status(400).json({
         success: false,
-        message: 'Invalid booking ID format.'
+        message: 'Booking ID is required.'
       });
     }
 
+    // Let getBookingById handle both ObjectId and human-readable booking_id formats
     const booking = await bookingService.getBookingById(id);
 
     // Verify booking belongs to customer
@@ -218,26 +220,35 @@ export const trackBooking = async (req, res, next) => {
     }
 
     // Map booking status to customer tracking status
-    // confirmed -> confirmed (when booking is created)
-    // pending -> confirmed (waiting for washer assignment)
+    // If washer is assigned but status is still pending -> washerAssigned
+    // pending (no washer) -> confirmed (waiting for washer assignment)
     // accepted -> washerAssigned
     // on_the_way -> onTheWay
     // arrived -> arrived
     // in_progress -> washing
     // completed -> completed
     let trackingStatus = 'confirmed';
-    const statusMap = {
-      'pending': 'confirmed',
-      'accepted': 'washerAssigned',
-      'on_the_way': 'onTheWay',
-      'arrived': 'arrived',
-      'in_progress': 'washing',
-      'completed': 'completed',
-      'cancelled': 'cancelled'
-    };
     
-    if (statusMap[booking.status]) {
-      trackingStatus = statusMap[booking.status];
+    // Check if washer is assigned (even if status is still pending)
+    const hasWasher = booking.washer_id && booking.washer_name;
+    
+    if (booking.status === 'pending' && hasWasher) {
+      // Washer assigned but not yet accepted
+      trackingStatus = 'washerAssigned';
+    } else {
+      const statusMap = {
+        'pending': 'confirmed',
+        'accepted': 'washerAssigned',
+        'on_the_way': 'onTheWay',
+        'arrived': 'arrived',
+        'in_progress': 'washing',
+        'completed': 'completed',
+        'cancelled': 'cancelled'
+      };
+      
+      if (statusMap[booking.status]) {
+        trackingStatus = statusMap[booking.status];
+      }
     }
 
     // Format tracking data
@@ -263,6 +274,36 @@ export const trackBooking = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: trackingData
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Cancel booking (Customer)
+ * @route   PUT /api/v1/customer/bookings/:id/cancel
+ * @access  Private (Customer)
+ */
+export const cancelBooking = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const customerId = req.customer._id;
+    const { reason } = req.body;
+
+    if (!id || id === ':id') {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking ID is required.'
+      });
+    }
+
+    const booking = await bookingService.cancelBookingByCustomer(id, customerId, reason);
+
+    res.status(200).json({
+      success: true,
+      message: 'Booking cancelled successfully',
+      data: booking
     });
   } catch (error) {
     next(error);

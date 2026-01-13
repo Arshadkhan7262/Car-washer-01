@@ -1,11 +1,12 @@
 import React from 'react';
 import { cn } from "@/lib/utils";
-import { Check, Clock, Car, Droplets, CheckCircle2, XCircle } from 'lucide-react';
+import { Check, Clock, Car, MapPin, Droplets, CheckCircle2, XCircle } from 'lucide-react';
 
 const steps = [
   { key: 'pending', label: 'Pending', icon: Clock },
   { key: 'accepted', label: 'Accepted', icon: Check },
   { key: 'on_the_way', label: 'On The Way', icon: Car },
+  { key: 'arrived', label: 'Arrived', icon: MapPin },
   { key: 'in_progress', label: 'In Progress', icon: Droplets },
   { key: 'completed', label: 'Completed', icon: CheckCircle2 },
 ];

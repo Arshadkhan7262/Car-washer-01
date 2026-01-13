@@ -6,6 +6,7 @@ import 'dart:developer' as developer;
 import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
 import '../features/bookings/services/booking_service.dart';
+import '../controllers/book_controller.dart';
 
 class AppColors {
   // Primary color used for the header background and active status.
@@ -62,8 +63,8 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
   DateTime? _lastUpdateTime;
   
   List<String> imagePath = [
-    'assets/images/car.png',
-    'assets/images/car.png',
+    'assets/images/car5.png',
+    'assets/images/car5.png',
     'assets/images/locationn.png',
     'assets/images/wash.png',
     'assets/images/complete.png'
@@ -77,20 +78,22 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
     
     // Start periodic refresh every 5 seconds for real-time updates
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (mounted && !_isRefreshing) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (!_isRefreshing) {
         _fetchTrackingData(silent: true);
-        // Update UI to show last update time
-        if (mounted) {
-          setState(() {
-            // Trigger rebuild to update last update time display
-          });
-        }
       }
     });
     
     // Also update the last update time display every second
     _uiUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted && _lastUpdateTime != null) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_lastUpdateTime != null) {
         setState(() {
           // Trigger rebuild to update "X seconds ago" text
         });
@@ -113,7 +116,7 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
       _isRefreshing = true;
       
       // Only show loading indicator on initial load, not on silent refreshes
-      if (!silent) {
+      if (!silent && mounted) {
         setState(() {
           isLoading = true;
           error = null;
@@ -129,14 +132,17 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
       final statusChanged = newStatus != currentStatus;
       final washerAssigned = data['washer_name'] != null && trackingData?['washer_name'] == null;
       
-      setState(() {
-        trackingData = data;
-        bookingIdDisplay = data['booking_id']?.toString() ?? widget.bookingId;
-        currentStatus = newStatus;
-        isLoading = false;
-        error = null;
-        _lastUpdateTime = DateTime.now();
-      });
+      // Only update state if widget is still mounted
+      if (mounted) {
+        setState(() {
+          trackingData = data;
+          bookingIdDisplay = data['booking_id']?.toString() ?? widget.bookingId;
+          currentStatus = newStatus;
+          isLoading = false;
+          error = null;
+          _lastUpdateTime = DateTime.now();
+        });
+      }
       
       // Show notification if status changed or washer was assigned
       if (mounted && (statusChanged || washerAssigned)) {
@@ -188,7 +194,7 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
       developer.log('❌ [TrackOrderScreen] Error fetching tracking data: $e');
       
       // Only show error on initial load, not on silent refreshes
-      if (!silent) {
+      if (!silent && mounted) {
         setState(() {
           // Clean up error message for user display
           String errorMsg = e.toString();
@@ -265,14 +271,44 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
     return '$weekday, $month $day';
   }
 
-  String _formatPrice(dynamic price) {
-    if (price == null) return '0.00';
-    try {
-      final p = (price is num) ? price.toDouble() : double.parse(price.toString());
-      return p.toStringAsFixed(2);
-    } catch (e) {
-      return '0.00';
+  /// Get total price - matches booking confirmation screen logic
+  String _getTotalPrice(Map<String, dynamic> data) {
+    // PRIMARY: Get from BookController (same as booking confirmation screen)
+    // This works because user navigates from booking confirmation, so controller still has the service
+    final BookController? bookController = Get.isRegistered<BookController>() 
+        ? Get.find<BookController>() 
+        : null;
+    
+    if (bookController?.selectedService.value != null) {
+      final price = bookController!.selectedService.value!.basePrice;
+      if (price > 0.0) {
+        return '\$${price.toStringAsFixed(2)}';
+      }
     }
+    
+    // SECONDARY: Try to get price from service object in tracking data
+    if (data['service'] is Map) {
+      final servicePrice = data['service']?['base_price'] ?? 
+                          data['service']?['price'] ?? 
+                          data['service']?['basePrice'];
+      if (servicePrice != null) {
+        final price = servicePrice is num ? servicePrice.toDouble() : double.tryParse(servicePrice.toString()) ?? 0.0;
+        if (price > 0.0) {
+          return '\$${price.toStringAsFixed(2)}';
+        }
+      }
+    }
+    
+    // FALLBACK: Get from API response total
+    final total = data['total'] ?? 
+                data['total_amount'] ?? 
+                data['price'] ?? 
+                data['amount'] ??
+                0.0;
+    
+    final totalAmount = total is num ? total.toDouble() : double.tryParse(total.toString()) ?? 0.0;
+    
+    return '\$${totalAmount.toStringAsFixed(2)}';
   }
 
   @override
@@ -739,7 +775,7 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
                   style: AppStyles.bodyText.copyWith(color: textColor),
                 ),
                 Text(
-                  '\$${_formatPrice(data['total'])}',
+                  _getTotalPrice(data),
                   style: AppStyles.totalValue.copyWith(color: textColor),
                 ),
               ],

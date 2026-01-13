@@ -16,6 +16,10 @@ import '../features/addresses/services/address_service.dart';
 import '../features/vehicles/services/vehicle_service.dart';
 
 class BookController extends GetxController {
+  // Static flag to indicate resuming before controller creation
+  static bool _willResume = false;
+  static void setWillResume(bool value) => _willResume = value;
+  
   PageController? _pageController;
   int _pageControllerKey = 0; // Key to force PageView recreation
   
@@ -81,6 +85,11 @@ class BookController extends GetxController {
   // final Rx<DraftBooking?> currentDraft = Rx<DraftBooking?>(null);
   // final RxBool isLoadingDraft = false.obs;
   final RxBool isCreatingBooking = false.obs;
+  bool _draftLoaded = false; // Flag to prevent loading draft multiple times
+  bool _isResuming = false; // Flag to indicate we're resuming (prevents onInit interference)
+  
+  // Setter for resuming flag (used by resume flow)
+  set isResuming(bool value) => _isResuming = value;
 
   // Selected Data
   final Rx<Service?> selectedService = Rx<Service?>(null);
@@ -126,6 +135,15 @@ class BookController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // If we're resuming (static flag or instance flag), skip draft loading and defaults
+    // But still initialize basic things like listeners
+    bool isResuming = _willResume || _isResuming;
+    if (isResuming) {
+      _isResuming = true; // Set instance flag
+      _willResume = false; // Clear static flag
+      print('🔄 [BookController] Resuming booking - skipping draft load in onInit');
+    }
+    
     // Reset PageController if it exists and has clients (from previous instance)
     // This ensures we start fresh when controller is reused
     if (_pageController != null && _pageController!.hasClients) {
@@ -134,17 +152,9 @@ class BookController extends GetxController {
     // Initialize PageController if needed
     _pageController ??= PageController(initialPage: currentPage.value);
     
-    // Initialize default date and time immediately if not set
-    if (selectedDate.value == null) {
-      final now = DateTime.now();
-      selectedDate.value = DateTime(now.year, now.month, now.day);
-    }
-    if (selectedTime.value.isEmpty) {
-      selectedTime.value = '10:00 AM';
-    }
-    
+    // Always initialize listeners (needed for UI updates)
     addressController.addListener(_updateState);
-    additionalLocationController.addListener(_updateState); // Add listener for new controller
+    additionalLocationController.addListener(_updateState);
     
     // Fetch services and vehicle types from API
     fetchServices();
@@ -362,7 +372,26 @@ class BookController extends GetxController {
       
       print('📍 [BookController] Fetched ${addresses.length} saved addresses');
       
-      // Set default address if available
+      // Preserve existing selection if it's still in the list
+      if (selectedSavedAddress.value != null && addresses.isNotEmpty) {
+        try {
+          final existingSelection = addresses.firstWhere(
+            (a) => a.id == selectedSavedAddress.value!.id,
+            orElse: () => addresses.first,
+          );
+          // Only update if the selection changed
+          if (existingSelection.id != selectedSavedAddress.value!.id) {
+            selectedSavedAddress.value = existingSelection;
+            addressController.text = existingSelection.fullAddress;
+            print('📍 [BookController] Updated address selection: ${existingSelection.fullAddress}');
+          }
+        } catch (e) {
+          // Selection not found, will set default below
+          selectedSavedAddress.value = null;
+        }
+      }
+      
+      // Set default address if no selection exists
       if (addresses.isNotEmpty && selectedSavedAddress.value == null) {
         try {
           final defaultAddress = addresses.firstWhere((a) => a.isDefault, orElse: () => addresses.first);
@@ -399,7 +428,25 @@ class BookController extends GetxController {
       
       print('🚗 [BookController] Fetched ${vehicles.length} saved vehicles');
       
-      // Set default vehicle if available
+      // Preserve existing selection if it's still in the list
+      if (selectedSavedVehicle.value != null && vehicles.isNotEmpty) {
+        try {
+          final existingSelection = vehicles.firstWhere(
+            (v) => v.id == selectedSavedVehicle.value!.id,
+            orElse: () => vehicles.first,
+          );
+          // Only update if the selection changed
+          if (existingSelection.id != selectedSavedVehicle.value!.id) {
+            selectedSavedVehicle.value = existingSelection;
+            print('🚗 [BookController] Updated vehicle selection: ${existingSelection.nameAndDetails}');
+          }
+        } catch (e) {
+          // Selection not found, will set default below
+          selectedSavedVehicle.value = null;
+        }
+      }
+      
+      // Set default vehicle if no selection exists
       if (vehicles.isNotEmpty && selectedSavedVehicle.value == null) {
         try {
           final defaultVehicle = vehicles.firstWhere((v) => v.isDefault, orElse: () => vehicles.first);
@@ -443,10 +490,22 @@ class BookController extends GetxController {
       // Navigate to next page first
       final nextPage = currentPage.value + 1;
       
-      // Update current page immediately for UI responsiveness
+      // Ensure PageController exists (create if needed)
+      if (_pageController == null) {
+        _pageController = PageController(initialPage: currentPage.value);
+      }
+      
+      // Wait for PageController to be ready (with timeout)
+      int retries = 0;
+      while (!pageController.hasClients && retries < 20) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        retries++;
+      }
+      
+      // Update current page for UI responsiveness
       currentPage.value = nextPage;
       
-      // Navigate PageView
+      // Navigate PageView using post-frame callback to ensure PageView is built
       if (pageController.hasClients) {
         try {
           await pageController.animateToPage(
@@ -455,16 +514,34 @@ class BookController extends GetxController {
             curve: Curves.easeIn,
           );
         } catch (e) {
-          // If animation fails, try jumpToPage
-          if (pageController.hasClients) {
+          print('Error navigating to page: $e');
+          // Fallback: try jumpToPage if animateToPage fails
+          try {
             pageController.jumpToPage(nextPage);
+          } catch (e2) {
+            print('Error jumping to page: $e2');
           }
         }
       } else {
-        // If PageController not attached yet, wait and try again
+        // If PageController still not ready, use post-frame callback
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (pageController.hasClients) {
-            pageController.jumpToPage(nextPage);
+            try {
+              pageController.jumpToPage(nextPage);
+            } catch (e) {
+              print('Error jumping to page after post-frame: $e');
+            }
+          } else {
+            // Last resort: try again after a short delay
+            Future.delayed(const Duration(milliseconds: 200), () {
+              if (pageController.hasClients) {
+                try {
+                  pageController.jumpToPage(nextPage);
+                } catch (e) {
+                  print('Error jumping to page after delay: $e');
+                }
+              }
+            });
           }
         });
       }

@@ -68,12 +68,27 @@ class DraftBookingService {
     try {
       final response = await _apiClient.delete('/customer/bookings/draft');
 
+      // If draft doesn't exist (404), treat it as success (draft already deleted)
+      if (response.statusCode == 404) {
+        log('✅ [deleteDraft] Draft already deleted or not found');
+        return;
+      }
+
       if (!response.success) {
         throw Exception(response.error ?? 'Failed to delete draft');
       }
 
       log('✅ [deleteDraft] Draft deleted successfully');
     } catch (e) {
+      // Only log and throw if it's not a 404 (which we already handled above)
+      // Check if error message contains 404 or "No draft booking found"
+      final errorString = e.toString();
+      if (errorString.contains('404') || 
+          errorString.contains('No draft booking found') ||
+          errorString.contains('not found')) {
+        log('✅ [deleteDraft] Draft already deleted or not found');
+        return;
+      }
       log('❌ [deleteDraft] Error: $e');
       throw Exception('Failed to delete draft: ${e.toString()}');
     }

@@ -374,7 +374,7 @@ class HomeScreen extends GetView<HomeController> {
                   margin: const EdgeInsets.symmetric(vertical: 15),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E1E1E),
+                    color: const Color(0xFF001C34),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: Theme.of(context).brightness == Brightness.dark 

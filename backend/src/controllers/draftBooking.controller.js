@@ -82,9 +82,39 @@ export const getDraft = async (req, res, next) => {
       });
     }
 
+    // Convert to plain object and ensure IDs are strings
+    const draftData = draft.toObject();
+    
+    // Ensure service_id is a string ID (handle both populated objects and string IDs)
+    if (draftData.service_id) {
+      if (typeof draftData.service_id === 'object' && draftData.service_id !== null) {
+        // If it's a populated object, extract the _id
+        draftData.service_id = draftData.service_id._id?.toString() || String(draftData.service_id._id);
+      } else {
+        // If it's already a string or ObjectId, convert to string
+        draftData.service_id = String(draftData.service_id);
+      }
+    }
+    
+    // Ensure vehicle_type_id is a string ID (handle both populated objects and string IDs)
+    if (draftData.vehicle_type_id) {
+      if (typeof draftData.vehicle_type_id === 'object' && draftData.vehicle_type_id !== null) {
+        // If it's a populated object, extract the _id
+        draftData.vehicle_type_id = draftData.vehicle_type_id._id?.toString() || String(draftData.vehicle_type_id._id);
+      } else {
+        // If it's already a string or ObjectId, convert to string
+        draftData.vehicle_type_id = String(draftData.vehicle_type_id);
+      }
+    }
+
+    // Ensure _id is a string
+    if (draftData._id) {
+      draftData._id = String(draftData._id);
+    }
+
     res.status(200).json({
       success: true,
-      data: draft
+      data: draftData
     });
   } catch (error) {
     next(error);

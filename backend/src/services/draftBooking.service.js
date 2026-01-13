@@ -29,11 +29,11 @@ export const saveDraftBooking = async (customerId, draftData) => {
 
 /**
  * Get draft booking for customer
+ * Returns IDs as strings (not populated objects) for consistent frontend handling
  */
 export const getDraftBooking = async (customerId) => {
-  const draft = await DraftBooking.findOne({ customer_id: customerId })
-    .populate('service_id', 'name base_price')
-    .populate('vehicle_type_id', 'name display_name image_url');
+  // Don't populate - return IDs as strings for consistent frontend handling
+  const draft = await DraftBooking.findOne({ customer_id: customerId });
 
   if (!draft) {
     return null;
