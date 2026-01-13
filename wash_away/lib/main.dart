@@ -7,12 +7,14 @@ import 'features/auth/screens/signup_screen.dart';
 import 'features/auth/screens/email_otp_screen.dart';
 import 'features/auth/screens/reset_password_screen.dart';
 import 'screens/dashboard_screen.dart';
-import 'screens/resume_booking_screen.dart';
+// DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+// import 'screens/resume_booking_screen.dart';
 import 'controllers/theme_controller.dart';
 import 'themes/dark_theme.dart';
 import 'themes/light_theme.dart';
 import 'features/auth/services/auth_service.dart';
-import 'features/bookings/services/draft_booking_service.dart';
+// DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+// import 'features/bookings/services/draft_booking_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,16 +47,19 @@ class _MyAppState extends State<MyApp> {
       if (isLoggedIn) {
         final statusData = await authService.checkUserStatus();
         if (statusData != null) {
+          // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
           // Check if there's a draft booking
-          final draftBookingService = DraftBookingService();
-          final hasDraft = await draftBookingService.checkDraftExists();
+          // final draftBookingService = DraftBookingService();
+          // final hasDraft = await draftBookingService.checkDraftExists();
           
           setState(() {
-            if (hasDraft) {
-              initialRoute = '/resume-booking';
-            } else {
-              initialRoute = '/dashboard';
-            }
+            // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+            // if (hasDraft) {
+            //   initialRoute = '/resume-booking';
+            // } else {
+            //   initialRoute = '/dashboard';
+            // }
+            initialRoute = '/dashboard';
             isLoading = false;
           });
           return;
@@ -123,10 +128,11 @@ class _MyAppState extends State<MyApp> {
           name: '/dashboard',
           page: () => const DashboardScreen(),
         ),
-        GetPage(
-          name: '/resume-booking',
-          page: () => const ResumeBookingScreen(),
-        ),
+        // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+        // GetPage(
+        //   name: '/resume-booking',
+        //   page: () => const ResumeBookingScreen(),
+        // ),
       ],
     ));
   }

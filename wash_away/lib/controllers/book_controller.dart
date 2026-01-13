@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/service_model.dart' hide Vehicle;
 import '../models/vehicle_type_model.dart';
-import '../models/draft_booking_model.dart';
+// DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+// import '../models/draft_booking_model.dart';
 import '../models/address_model.dart';
 import '../models/add_vehicle_model.dart';
 import '../screens/booking_confirm_screen.dart';
 import '../features/services/services/service_service.dart';
 import '../features/vehicles/services/vehicle_type_service.dart';
-import '../features/bookings/services/draft_booking_service.dart';
+// DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+// import '../features/bookings/services/draft_booking_service.dart';
 import '../features/bookings/services/booking_service.dart';
 import '../features/addresses/services/address_service.dart';
 import '../features/vehicles/services/vehicle_service.dart';
@@ -62,7 +64,8 @@ class BookController extends GetxController {
   final RxString vehicleTypesError = ''.obs;
 
   // Booking services
-  final DraftBookingService _draftBookingService = DraftBookingService();
+  // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+  // final DraftBookingService _draftBookingService = DraftBookingService();
   final BookingService _bookingService = BookingService();
   final AddressService _addressService = AddressService();
   final VehicleService _vehicleService = VehicleService();
@@ -73,9 +76,10 @@ class BookController extends GetxController {
   final RxBool isLoadingAddresses = false.obs;
   final RxBool isLoadingVehicles = false.obs;
 
+  // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
   // Draft booking state
-  final Rx<DraftBooking?> currentDraft = Rx<DraftBooking?>(null);
-  final RxBool isLoadingDraft = false.obs;
+  // final Rx<DraftBooking?> currentDraft = Rx<DraftBooking?>(null);
+  // final RxBool isLoadingDraft = false.obs;
   final RxBool isCreatingBooking = false.obs;
 
   // Selected Data
@@ -150,8 +154,9 @@ class BookController extends GetxController {
     fetchSavedAddresses();
     fetchSavedVehicles();
     
+    // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
     // Load draft booking if exists
-    loadDraftBooking();
+    // loadDraftBooking();
   }
 
   /// Reset controller for new booking
@@ -175,126 +180,130 @@ class BookController extends GetxController {
     }
   }
 
+  // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
   /// Load draft booking
-  Future<void> loadDraftBooking() async {
-    try {
-      isLoadingDraft.value = true;
-      final draft = await _draftBookingService.getDraft();
-      
-      if (draft != null) {
-        currentDraft.value = draft;
-        // Restore booking state from draft
-        if (draft.serviceId != null) {
-          try {
-            final service = services.firstWhere((s) => s.id == draft.serviceId, orElse: () => services.first);
-            if (service.id == draft.serviceId) {
-              selectedService.value = service;
-            }
-          } catch (e) {
-            // Service not found, skip
-          }
-        }
-        if (draft.vehicleTypeId != null) {
-          try {
-            final vehicleType = vehicleTypes.firstWhere((v) => v.id == draft.vehicleTypeId, orElse: () => vehicleTypes.first);
-            if (vehicleType.id == draft.vehicleTypeId) {
-              selectedVehicleType.value = vehicleType;
-              selectedVehicle.value = vehicleType.toVehicle();
-            }
-          } catch (e) {
-            // Vehicle type not found, skip
-          }
-        }
-        if (draft.selectedDate != null) {
-          selectedDate.value = draft.selectedDate;
-        }
-        if (draft.selectedTime != null) {
-          selectedTime.value = draft.selectedTime!;
-        }
-        if (draft.address != null) {
-          addressController.text = draft.address!;
-        }
-        if (draft.additionalLocation != null) {
-          additionalLocationController.text = draft.additionalLocation!;
-        }
-        if (draft.paymentMethod != null) {
-          selectedPaymentMethod.value = draft.paymentMethod!;
-        }
-        // Navigate to the step saved in draft
-        if (draft.step > 0 && draft.step <= 4) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_pageController != null && _pageController!.hasClients) {
-              _pageController!.jumpToPage(draft.step - 1);
-              currentPage.value = draft.step - 1;
-            }
-          });
-        }
-      }
-      isLoadingDraft.value = false;
-    } catch (e) {
-      isLoadingDraft.value = false;
-      // Silently fail - draft loading is optional
-    }
-  }
+  // Future<void> loadDraftBooking() async {
+  //   try {
+  //     isLoadingDraft.value = true;
+  //     final draft = await _draftBookingService.getDraft();
+  //     
+  //     if (draft != null) {
+  //       currentDraft.value = draft;
+  //       // Restore booking state from draft
+  //       if (draft.serviceId != null) {
+  //         try {
+  //           final service = services.firstWhere((s) => s.id == draft.serviceId, orElse: () => services.first);
+  //           if (service.id == draft.serviceId) {
+  //             selectedService.value = service;
+  //           }
+  //         } catch (e) {
+  //           // Service not found, skip
+  //         }
+  //       }
+  //       if (draft.vehicleTypeId != null) {
+  //         try {
+  //           final vehicleType = vehicleTypes.firstWhere((v) => v.id == draft.vehicleTypeId, orElse: () => vehicleTypes.first);
+  //           if (vehicleType.id == draft.vehicleTypeId) {
+  //             selectedVehicleType.value = vehicleType;
+  //             selectedVehicle.value = vehicleType.toVehicle();
+  //           }
+  //         } catch (e) {
+  //           // Vehicle type not found, skip
+  //         }
+  //       }
+  //       if (draft.selectedDate != null) {
+  //         selectedDate.value = draft.selectedDate;
+  //       }
+  //       if (draft.selectedTime != null) {
+  //         selectedTime.value = draft.selectedTime!;
+  //       }
+  //       if (draft.address != null) {
+  //         addressController.text = draft.address!;
+  //       }
+  //       if (draft.additionalLocation != null) {
+  //         additionalLocationController.text = draft.additionalLocation!;
+  //       }
+  //       if (draft.paymentMethod != null) {
+  //         selectedPaymentMethod.value = draft.paymentMethod!;
+  //       }
+  //       // Navigate to the step saved in draft
+  //       if (draft.step > 0 && draft.step <= 4) {
+  //         WidgetsBinding.instance.addPostFrameCallback((_) {
+  //           if (_pageController != null && _pageController!.hasClients) {
+  //             _pageController!.jumpToPage(draft.step - 1);
+  //             currentPage.value = draft.step - 1;
+  //           }
+  //         });
+  //       }
+  //     }
+  //     isLoadingDraft.value = false;
+  //   } catch (e) {
+  //     isLoadingDraft.value = false;
+  //     // Silently fail - draft loading is optional
+  //   }
+  // }
 
+  // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
   /// Map payment method from UI to API format
-  String? _mapPaymentMethod(String? uiPaymentMethod) {
-    if (uiPaymentMethod == null || uiPaymentMethod.isEmpty) {
-      return null;
-    }
-    
-    switch (uiPaymentMethod) {
-      case 'Credit Card':
-        return 'card';
-      case 'Wallet':
-        return 'wallet';
-      case 'Apple Pay':
-        return 'apple_pay';
-      case 'Google Pay':
-        return 'google_pay';
-      case 'Cash':
-        return 'cash';
-      default:
-        return 'cash'; // Default to cash
-    }
-  }
+  // String? _mapPaymentMethod(String? uiPaymentMethod) {
+  //   if (uiPaymentMethod == null || uiPaymentMethod.isEmpty) {
+  //     return null;
+  //   }
+  //   
+  //   switch (uiPaymentMethod) {
+  //     case 'Credit Card':
+  //       return 'card';
+  //     case 'Wallet':
+  //       return 'wallet';
+  //     case 'Apple Pay':
+  //       return 'apple_pay';
+  //     case 'Google Pay':
+  //       return 'google_pay';
+  //     case 'Cash':
+  //       return 'cash';
+  //     default:
+  //       return 'cash'; // Default to cash
+  //   }
+  // }
 
+  // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
   /// Save draft booking
-  Future<void> saveDraft() async {
-    try {
-      // Map payment method to API format
-      final mappedPaymentMethod = _mapPaymentMethod(
-        selectedPaymentMethod.value.isNotEmpty ? selectedPaymentMethod.value : null
-      );
-      
-      final draft = DraftBooking(
-        step: currentPage.value + 1,
-        serviceId: selectedService.value?.id,
-        vehicleTypeId: selectedVehicleType.value?.id,
-        vehicleTypeName: selectedVehicleType.value?.displayName,
-        selectedDate: selectedDate.value,
-        selectedTime: selectedTime.value.isNotEmpty ? selectedTime.value : null,
-        address: addressController.text.trim().isNotEmpty ? addressController.text.trim() : null,
-        additionalLocation: additionalLocationController.text.trim().isNotEmpty ? additionalLocationController.text.trim() : null,
-        paymentMethod: mappedPaymentMethod,
-      );
-      
-      await _draftBookingService.saveDraft(draft);
-    } catch (e) {
-      // Silently fail - draft saving is optional
-      print('Failed to save draft: $e');
-    }
-  }
+  // Future<void> saveDraft() async {
+  //   try {
+  //     // Map payment method to API format
+  //     final mappedPaymentMethod = _mapPaymentMethod(
+  //       selectedPaymentMethod.value.isNotEmpty ? selectedPaymentMethod.value : null
+  //     );
+  //     
+  //     final draft = DraftBooking(
+  //       step: currentPage.value + 1,
+  //       serviceId: selectedService.value?.id,
+  //       vehicleTypeId: selectedVehicleType.value?.id,
+  //       vehicleTypeName: selectedVehicleType.value?.displayName,
+  //       selectedDate: selectedDate.value,
+  //       selectedTime: selectedTime.value.isNotEmpty ? selectedTime.value : null,
+  //       address: addressController.text.trim().isNotEmpty ? addressController.text.trim() : null,
+  //       additionalLocation: additionalLocationController.text.trim().isNotEmpty ? additionalLocationController.text.trim() : null,
+  //       paymentMethod: mappedPaymentMethod,
+  //     );
+  //     
+  //     await _draftBookingService.saveDraft(draft);
+  //   } catch (e) {
+  //     // Silently fail - draft saving is optional
+  //     print('Failed to save draft: $e');
+  //   }
+  // }
 
+  // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
   /// Clear draft booking
-  Future<void> clearDraft() async {
-    try {
-      await _draftBookingService.deleteDraft();
-      currentDraft.value = null;
-    } catch (e) {
-      print('Failed to clear draft: $e');
-    }
-  }
+  // Future<void> clearDraft() async {
+  //   try {
+  //     await _draftBookingService.deleteDraft();
+  //     currentDraft.value = null;
+  //   } catch (e) {
+  //     print('Failed to clear draft: $e');
+  //   }
+  // }
 
   /// Fetch services from API
   Future<void> fetchServices() async {
@@ -475,11 +484,12 @@ class BookController extends GetxController {
         fetchSavedVehicles();
       }
       
+      // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
       // Save draft after navigation (non-blocking)
-      saveDraft().catchError((e) {
-        // Silently handle draft save errors
-        print('Draft save error: $e');
-      });
+      // saveDraft().catchError((e) {
+      //   // Silently handle draft save errors
+      //   print('Draft save error: $e');
+      // });
     } else {
       // Step 4 complete - confirm booking
       await confirmBooking(context);
@@ -558,8 +568,9 @@ class BookController extends GetxController {
         paymentMethod: paymentMethod,
       );
 
+      // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
       // Clear draft after successful booking
-      await clearDraft();
+      // await clearDraft();
 
       isCreatingBooking.value = false;
 

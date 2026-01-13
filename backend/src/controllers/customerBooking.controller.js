@@ -1,5 +1,6 @@
 import * as bookingService from '../services/booking.service.js';
-import * as draftBookingService from '../services/draftBooking.service.js';
+// DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+// import * as draftBookingService from '../services/draftBooking.service.js';
 import * as vehicleTypeService from '../services/vehicleType.service.js';
 import AppError from '../errors/AppError.js';
 
@@ -110,8 +111,9 @@ export const createBooking = async (req, res, next) => {
 
     const booking = await bookingService.createBooking(bookingData);
 
+    // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
     // Delete draft booking after successful booking creation
-    await draftBookingService.deleteDraftBooking(customerId);
+    // await draftBookingService.deleteDraftBooking(customerId);
 
     res.status(201).json({
       success: true,

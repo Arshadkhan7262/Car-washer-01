@@ -1,3 +1,4 @@
+/* DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 import DraftBooking from '../models/DraftBooking.model.js';
 import AppError from '../errors/AppError.js';
 
@@ -77,4 +78,4 @@ export const checkDraftExists = async (customerId) => {
     last_updated: draft.updated_date
   };
 };
-
+*/

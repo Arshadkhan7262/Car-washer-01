@@ -1,3 +1,4 @@
+/* DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 import mongoose from 'mongoose';
 
 const draftBookingSchema = new mongoose.Schema({
@@ -75,4 +76,4 @@ draftBookingSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
 const DraftBooking = mongoose.model('DraftBooking', draftBookingSchema);
 
 export default DraftBooking;
-
+*/

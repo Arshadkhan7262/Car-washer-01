@@ -1,3 +1,5 @@
+// DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+/*
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -166,4 +168,4 @@ class ResumeBookingScreen extends StatelessWidget {
     );
   }
 }
-
+*/

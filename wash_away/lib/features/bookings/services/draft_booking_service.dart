@@ -1,3 +1,5 @@
+// DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
+/*
 import 'dart:developer';
 import '../../../api/api_client.dart';
 import '../../../models/draft_booking_model.dart';
@@ -77,4 +79,4 @@ class DraftBookingService {
     }
   }
 }
-
+*/

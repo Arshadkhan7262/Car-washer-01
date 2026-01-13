@@ -1,3 +1,4 @@
+/* DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 import * as draftBookingService from '../services/draftBooking.service.js';
 
 /**
@@ -136,4 +137,4 @@ export const checkDraft = async (req, res, next) => {
     next(error);
   }
 };
-
+*/

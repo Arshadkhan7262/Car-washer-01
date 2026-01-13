@@ -1,3 +1,4 @@
+/* DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 import express from 'express';
 import * as draftBookingController from '../controllers/draftBooking.controller.js';
 import { protectCustomer } from '../middleware/auth.middleware.js';
@@ -16,4 +17,4 @@ router
 router.get('/check', draftBookingController.checkDraft);
 
 export default router;
-
+*/

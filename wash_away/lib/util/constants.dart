@@ -2,7 +2,7 @@
 class AppConstants {
   // API Configuration
   static const String baseUrl =
-      'http://192.168.18.40:3000/api/v1'; // Backend API URL - Update with your network IP
+      'http://192.168.18.31:3000/api/v1'; // Backend API URL - Update with your network IP
   static const int connectionTimeout = 30000; // 30 seconds
   static const int receiveTimeout = 30000; // 30 seconds
 
