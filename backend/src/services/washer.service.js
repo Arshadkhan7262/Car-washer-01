@@ -98,7 +98,9 @@ export const getAllWashers = async (filters = {}) => {
       total_earnings: totalEarnings,
       wallet_balance: washer.wallet_balance || 0,
       branch_name: washer.branch_name || null,
-      branch_id: washer.branch_id || null
+      branch_id: washer.branch_id || null,
+      // Include current location with address
+      current_location: washer.current_location || null
     };
   }));
 
@@ -178,6 +180,8 @@ export const getWasherById = async (washerId) => {
     total_ratings: 0, // TODO: Calculate from reviews if review system exists
     total_earnings: totalEarnings,
     wallet_balance: washer.wallet_balance || 0,
+    // Include current location with address
+    current_location: washer.current_location || null,
     performance: {
       totalJobs,
       completedJobs,

@@ -18,7 +18,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { 
   Plus, MoreHorizontal, Star, Phone, Mail, Building2,
-  CheckCircle2, XCircle, Ban, DollarSign, Calendar, TrendingUp, CheckCircle, X
+  CheckCircle2, XCircle, Ban, DollarSign, Calendar, TrendingUp, CheckCircle, X,
+  MapPin, Navigation
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -215,6 +216,21 @@ export default function Washers() {
       )
     },
     {
+      header: 'Location',
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          {row.current_location?.latitude ? (
+            <div className="flex items-center gap-1 text-xs">
+              <MapPin className="w-3 h-3 text-emerald-600" />
+              <span className="text-slate-600">Live</span>
+            </div>
+          ) : (
+            <span className="text-slate-400 text-xs">-</span>
+          )}
+        </div>
+      )
+    },
+    {
       header: 'Email Verified',
       cell: (row) => (
         <div className="flex items-center gap-2">
@@ -401,6 +417,70 @@ export default function Washers() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Current Location */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-500 uppercase">Current Location</h4>
+                  {selectedWasher.current_location && selectedWasher.current_location.latitude ? (
+                    <div className="bg-blue-50 rounded-xl p-4 space-y-3">
+                      {selectedWasher.current_location.address && (
+                        <div className="flex items-start gap-3">
+                          <MapPin className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-slate-900">Address</p>
+                            <p className="text-sm text-slate-600">{selectedWasher.current_location.address}</p>
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-start gap-3">
+                        <Navigation className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-900">Coordinates</p>
+                          <p className="text-sm text-slate-600">
+                            {selectedWasher.current_location.latitude?.toFixed(6)}, {selectedWasher.current_location.longitude?.toFixed(6)}
+                          </p>
+                        </div>
+                      </div>
+                      {selectedWasher.current_location.last_updated && (
+                        <div className="flex items-center gap-2 pt-2 border-t border-blue-200">
+                          <p className="text-xs text-slate-500">
+                            Last updated: {new Date(selectedWasher.current_location.last_updated).toLocaleString()}
+                          </p>
+                        </div>
+                      )}
+                      {selectedWasher.current_location.speed && (
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-slate-500">
+                            Speed: {selectedWasher.current_location.speed?.toFixed(1)} km/h
+                          </p>
+                        </div>
+                      )}
+                      <div className="pt-2">
+                        <a
+                          href={`https://www.google.com/maps?q=${selectedWasher.current_location.latitude},${selectedWasher.current_location.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-700 underline"
+                        >
+                          View on Google Maps →
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <div className="flex items-start gap-3">
+                        <MapPin className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-900">Location Not Available</p>
+                          <p className="text-sm text-slate-500 mt-1">
+                            Location will be available when the washer starts tracking their location. 
+                            This typically happens when they accept a job and begin navigation.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Performance Stats */}

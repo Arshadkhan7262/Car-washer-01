@@ -2,11 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../services/auth_service.dart';
+import '../../dashboard/services/location_initialization_service.dart';
 
 /// Authentication Controller
 /// Manages Email Authentication flow via Backend API
 class AuthController extends GetxController {
   final AuthService _authService = AuthService();
+  final LocationInitializationService _locationInitService = LocationInitializationService();
 
   // Observable state variables
   var isLoading = false.obs;
@@ -43,6 +45,14 @@ class AuthController extends GetxController {
         // Navigate to dashboard with pending status
         Get.offAllNamed('/dashboard', arguments: {'isPending': true});
         return true;
+      }
+
+      // If account is active, initialize location tracking after navigation
+      if (washerStatus == 'active') {
+        // Small delay to ensure dashboard is loaded
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          _locationInitService.initializeLocationTracking();
+        });
       }
 
       // Success - navigate to dashboard
