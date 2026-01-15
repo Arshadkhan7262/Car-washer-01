@@ -9,3 +9,5 @@ router.post('/validate', protectCustomer, couponController.validateCoupon);
 
 export default router;
 
+
+

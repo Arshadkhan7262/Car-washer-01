@@ -116,18 +116,18 @@ class _ServiceCardWidgetState extends State<ServiceCardWidget> {
               ],
             ),
                 Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                // crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-             
-                  Text(
-                    widget.service.subtitle,
-                    style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Expanded(
+                    child: Text(
+                      widget.service.subtitle,
+                      style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  Spacer(),
-                   Text(
+                  const SizedBox(width: 8),
+                  Text(
                     widget.service.price,
                     style: GoogleFonts.inter(
                       color: Theme.of(context).textTheme.titleMedium!.color,

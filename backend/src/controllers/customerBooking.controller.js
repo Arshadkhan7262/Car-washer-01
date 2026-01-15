@@ -1,4 +1,5 @@
 import * as bookingService from '../services/booking.service.js';
+import * as washerLocationService from '../services/washerLocation.service.js';
 // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 // import * as draftBookingService from '../services/draftBooking.service.js';
 import * as vehicleTypeService from '../services/vehicleType.service.js';
@@ -181,7 +182,8 @@ export const getCustomerBookingById = async (req, res, next) => {
     const booking = await bookingService.getBookingById(id);
 
     // Verify booking belongs to customer
-    if (booking.customer_id._id.toString() !== customerId.toString()) {
+    const bookingCustomerId = booking.customer_id?._id || booking.customer_id;
+    if (bookingCustomerId.toString() !== customerId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to view this booking'
@@ -218,7 +220,8 @@ export const trackBooking = async (req, res, next) => {
     const booking = await bookingService.getBookingById(id);
 
     // Verify booking belongs to customer
-    if (booking.customer_id._id.toString() !== customerId.toString()) {
+    const bookingCustomerId = booking.customer_id?._id || booking.customer_id;
+    if (bookingCustomerId.toString() !== customerId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to track this booking'
@@ -257,6 +260,17 @@ export const trackBooking = async (req, res, next) => {
       }
     }
 
+    // Get washer location if washer is assigned
+    let washerLocation = null;
+    if (booking.washer_id && booking.washer_id._id) {
+      try {
+        washerLocation = await washerLocationService.getWasherLocation(booking.washer_id._id.toString());
+      } catch (error) {
+        // If location fetch fails, continue without location data
+        console.error('Failed to fetch washer location:', error.message);
+      }
+    }
+
     // Format tracking data
     const trackingData = {
       booking_id: booking.booking_id,
@@ -264,6 +278,7 @@ export const trackBooking = async (req, res, next) => {
       booking_status: booking.status,
       washer_name: booking.washer_name || null,
       washer_id: booking.washer_id ? booking.washer_id._id : null,
+      washer_location: washerLocation,
       timeline: booking.timeline || [],
       booking_date: booking.booking_date,
       time_slot: booking.time_slot,
@@ -282,6 +297,66 @@ export const trackBooking = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: trackingData
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get washer location for a booking
+ * @route   GET /api/v1/customer/bookings/:id/washer-location
+ * @access  Private (Customer)
+ */
+export const getWasherLocation = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const customerId = req.customer._id;
+
+    if (!id || id === ':id') {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking ID is required.'
+      });
+    }
+
+    // Get booking to verify ownership and get washer ID
+    const booking = await bookingService.getBookingById(id);
+
+    // Verify booking belongs to customer
+    const bookingCustomerId = booking.customer_id?._id || booking.customer_id;
+    if (bookingCustomerId.toString() !== customerId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to view this booking'
+      });
+    }
+
+    // Check if washer is assigned
+    if (!booking.washer_id || !booking.washer_id._id) {
+      return res.status(200).json({
+        success: true,
+        data: null,
+        message: 'No washer assigned to this booking yet'
+      });
+    }
+
+    // Get washer location
+    const washerLocation = await washerLocationService.getWasherLocation(
+      booking.washer_id._id.toString()
+    );
+
+    if (!washerLocation) {
+      return res.status(200).json({
+        success: true,
+        data: null,
+        message: 'Washer location not available'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: washerLocation
     });
   } catch (error) {
     next(error);

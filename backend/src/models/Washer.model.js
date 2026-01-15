@@ -64,6 +64,31 @@ const washerSchema = new mongoose.Schema({
     default: null,
     trim: true
   },
+  current_location: {
+    latitude: {
+      type: Number,
+      default: null
+    },
+    longitude: {
+      type: Number,
+      default: null
+    },
+    last_updated: {
+      type: Date,
+      default: null
+    },
+    heading: {
+      type: Number,  // Direction in degrees (0-360)
+      default: null,
+      min: 0,
+      max: 360
+    },
+    speed: {
+      type: Number,  // Speed in km/h
+      default: null,
+      min: 0
+    }
+  },
   created_date: {
     type: Date,
     default: Date.now

@@ -12,7 +12,8 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     trim: true,
     match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email'],
-    sparse: true // Allow multiple null emails
+    sparse: true, // Allow multiple null emails
+    unique: true // Ensure email uniqueness at database level
   },
   phone: {
     type: String,
@@ -37,6 +38,25 @@ const userSchema = new mongoose.Schema({
     trim: true,
     sparse: true // Allow null for existing users during migration
     // Note: Indexes are created explicitly below to avoid conflicts
+  },
+  // Google OAuth Authentication
+  googleId: {
+    type: String,
+    trim: true,
+    sparse: true // Allow null for users not using Google login
+  },
+  profilePicture: {
+    type: String,
+    trim: true
+  },
+  avatar: {
+    type: String,
+    trim: true
+  },
+  provider: {
+    type: String,
+    enum: ['email', 'google'],
+    default: 'email'
   },
   // Phone is verified by Firebase for Firebase-authenticated users
   // For existing OTP users, phone_verified remains as set
@@ -152,7 +172,7 @@ userSchema.index(
 // #region agent log
 fetch('http://127.0.0.1:7242/ingest/6e5cc667-9ca2-482c-8249-fe079e856385',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'User.model.js:109',message:'Registered firebaseUid+role compound index',data:{index:'firebaseUid+role'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
 // #endregion
-userSchema.index({ email: 1 });
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
 // #region agent log
 fetch('http://127.0.0.1:7242/ingest/6e5cc667-9ca2-482c-8249-fe079e856385',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'User.model.js:110',message:'Registered email index',data:{index:'email'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
 // #endregion

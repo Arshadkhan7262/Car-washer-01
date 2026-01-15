@@ -4,10 +4,12 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../models/job_detail_model.dart';
 import '../services/jobs_service.dart';
+import '../services/location_tracker.dart';
 
 class JobDetailController extends GetxController {
   final String jobId;
   final JobsService _jobsService = JobsService();
+  final LocationTracker _locationTracker = LocationTracker();
   
   var jobDetail = JobDetailModel(
     bookingId: "",
@@ -28,6 +30,7 @@ class JobDetailController extends GetxController {
   
   var isLoading = false.obs;
   var error = ''.obs;
+  var isLocationTracking = false.obs;
 
   JobDetailController({required this.jobId});
 
@@ -52,6 +55,7 @@ class JobDetailController extends GetxController {
   @override
   void onClose() {
     _refreshTimer?.cancel();
+    _locationTracker.dispose();
     super.onClose();
   }
 
@@ -71,6 +75,9 @@ class JobDetailController extends GetxController {
 
       jobDetail.value = _mapToJobDetailModel(jobData);
       isLoading.value = false;
+      
+      // Start/stop location tracking based on job status
+      _manageLocationTracking();
     } catch (e) {
       error.value = 'Error: ${e.toString()}';
       isLoading.value = false;
@@ -246,6 +253,8 @@ class JobDetailController extends GetxController {
       final success = await _jobsService.updateJobStatus(jobId, status);
       
       if (success) {
+        // Manage location tracking based on new status
+        _manageLocationTracking();
         // Refresh job details silently in background to sync with backend
         fetchJobDetails();
       } else {
@@ -272,6 +281,84 @@ class JobDetailController extends GetxController {
         duration: const Duration(seconds: 3),
       );
     }
+  }
+
+  /// Manage location tracking based on job status
+  void _manageLocationTracking() {
+    final currentStep = jobDetail.value.currentStep;
+    
+    // Start tracking when washer is on the way, arrived, or washing
+    // Stop tracking when job is completed or not started
+    if (currentStep == JobStep.onTheWay || 
+        currentStep == JobStep.arrived || 
+        currentStep == JobStep.washing) {
+      if (!_locationTracker.isTracking) {
+        _startLocationTracking();
+      }
+    } else {
+      if (_locationTracker.isTracking) {
+        _stopLocationTracking();
+      }
+    }
+  }
+
+  /// Start location tracking
+  Future<void> _startLocationTracking() async {
+    if (_locationTracker.isTracking) {
+      return;
+    }
+
+    try {
+      final started = await _locationTracker.startTracking(
+        updateInterval: const Duration(seconds: 3), // Update every 3 seconds for real-time tracking
+        distanceFilter: 5, // Update every 5 meters for more frequent updates
+      );
+
+      if (started) {
+        isLocationTracking.value = true;
+        Get.snackbar(
+          'Location Tracking',
+          'Your location is now being shared with the customer',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.blue,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2),
+          margin: const EdgeInsets.all(16),
+          borderRadius: 8,
+        );
+      } else {
+        Get.snackbar(
+          'Location Permission',
+          'Please enable location permissions to share your location',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
+      print('Error starting location tracking: $e');
+    }
+  }
+
+  /// Manually start location tracking (public method)
+  Future<void> startLocationTracking() async {
+    await _startLocationTracking();
+  }
+
+  /// Manually stop location tracking (public method)
+  Future<void> stopLocationTracking() async {
+    await _stopLocationTracking();
+  }
+
+  /// Stop location tracking
+  Future<void> _stopLocationTracking() async {
+    if (!_locationTracker.isTracking) {
+      return;
+    }
+
+    await _locationTracker.stopTracking();
+    isLocationTracking.value = false;
   }
 
   /// Complete job
@@ -308,6 +395,9 @@ class JobDetailController extends GetxController {
         borderRadius: 8,
       );
 
+      // Stop location tracking when job is completed
+      await _stopLocationTracking();
+      
       // Update in background - don't block UI
       final success = await _jobsService.completeJob(jobId, note: note);
       

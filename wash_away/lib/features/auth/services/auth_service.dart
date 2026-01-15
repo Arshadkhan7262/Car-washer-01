@@ -434,5 +434,79 @@ class AuthService {
       return null;
     }
   }
+
+  /// Login with Google OAuth
+  Future<Map<String, dynamic>> loginWithGoogle(String idToken) async {
+    try {
+      log('📡 [loginWithGoogle] Sending ID token to backend...');
+      log('   Token length: ${idToken.length}');
+      log('   Token preview: ${idToken.substring(0, 20)}...');
+      
+      final response = await _apiClient.post(
+        '/auth/google/customer',
+        body: {
+          'idToken': idToken,
+        },
+      );
+
+      log('📥 [loginWithGoogle] Backend response received');
+      log('   Success: ${response.success}');
+      log('   Status code: ${response.statusCode}');
+
+      if (!response.success) {
+        String errorMessage = response.error ?? 'Google login failed';
+        log('❌ [loginWithGoogle] Backend returned error: $errorMessage');
+        throw Exception(errorMessage);
+      }
+
+      // New endpoint returns { token, user } directly (not wrapped in data)
+      final token = response.data['token'];
+      final user = response.data['user'];
+
+      log('🔍 [loginWithGoogle] Parsing response data...');
+      log('   Token: ${token != null ? "✅ Present" : "❌ NULL"}');
+      log('   User: ${user != null ? "✅ Present" : "❌ NULL"}');
+
+      if (token == null) {
+        log('❌ [loginWithGoogle] No access token in response');
+        throw Exception('No access token received from server');
+      }
+
+      if (user == null) {
+        log('❌ [loginWithGoogle] No user data in response');
+        throw Exception('No user data received from server');
+      }
+
+      log('💾 [loginWithGoogle] Saving auth data...');
+      // Save tokens and user data
+      // Note: New endpoint doesn't return refreshToken, using token for both
+      await _saveAuthData(
+        token: token,
+        refreshToken: token, // Use same token as refresh (or handle separately if needed)
+        userId: user['id']?.toString() ?? '',
+        userEmail: user['email']?.toString() ?? '',
+        userName: user['name']?.toString() ?? '',
+        userPhone: user['phone']?.toString() ?? '', // Phone might be placeholder for Google users
+      );
+
+      log('✅ [loginWithGoogle] Auth data saved successfully');
+
+      // Set token in API client for future requests
+      _apiClient.setAuthToken(token);
+
+      log('✅ [loginWithGoogle] Login completed successfully');
+
+      return {
+        'success': true,
+        'user': user,
+        'token': token,
+        'message': 'Login successful',
+      };
+    } catch (e, stackTrace) {
+      log('❌ [loginWithGoogle] Exception occurred: $e');
+      log('📚 Stack trace: $stackTrace');
+      throw Exception('Google login failed: ${e.toString()}');
+    }
+  }
 }
 

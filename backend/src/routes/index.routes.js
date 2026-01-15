@@ -3,6 +3,7 @@ import authRoutes from './auth.routes.js';
 import firebaseAuthRoutes from './firebaseAuth.routes.js';
 import customerAuthRoutes from './customerAuth.routes.js';
 import washerAuthRoutes from './washerAuth.routes.js';
+import authGoogleRoutes from './authGoogle.routes.js';
 import dashboardRoutes from './dashboard.routes.js';
 import bookingRoutes from './booking.routes.js';
 import serviceRoutes from './service.routes.js';
@@ -15,6 +16,7 @@ import washerHomeRoutes from './washerHome.routes.js';
 import washerJobsRoutes from './washerJobs.routes.js';
 import washerWalletRoutes from './washerWallet.routes.js';
 import washerProfileRoutes from './washerProfile.routes.js';
+import washerLocationRoutes from './washerLocation.routes.js';
 
 const router = express.Router();
 
@@ -30,6 +32,7 @@ router.get('/health', (req, res) => {
 // Authentication routes
 router.use('/admin/auth', authRoutes); // Admin uses email/password
 router.use('/auth', firebaseAuthRoutes); // Firebase auth for Customers (legacy)
+router.use('/auth', authGoogleRoutes); // Google OAuth authentication (POST /auth/google/customer)
 router.use('/customer/auth', customerAuthRoutes); // Customer email/password authentication
 router.use('/washer/auth', washerAuthRoutes); // Washer email/password authentication (no Firebase)
 
@@ -46,6 +49,7 @@ router.use('/washer/home', washerHomeRoutes); // Home screen: dashboard stats
 router.use('/washer/jobs', washerJobsRoutes); // Jobs screen: job management
 router.use('/washer/wallet', washerWalletRoutes); // Wallet screen: balance, transactions, withdrawals
 router.use('/washer/profile', washerProfileRoutes); // Profile screen: profile data and updates
+router.use('/washer/location', washerLocationRoutes); // Location: update and get washer location
 
 // Customer App (wash_away) Screen-specific API routes
 import customerProfileRoutes from './customerProfile.routes.js';

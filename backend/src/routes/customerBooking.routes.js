@@ -13,6 +13,7 @@ router
   .get(customerBookingController.getCustomerBookings);
 
 router.get('/:id/track', customerBookingController.trackBooking);
+router.get('/:id/washer-location', customerBookingController.getWasherLocation);
 router.put('/:id/cancel', customerBookingController.cancelBooking);
 router.get('/:id', customerBookingController.getCustomerBookingById);
 

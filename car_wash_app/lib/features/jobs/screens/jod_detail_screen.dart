@@ -166,6 +166,33 @@ class JobDetailScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+                // Location tracking indicator
+                Obx(() {
+                  if (controller.isLocationTracking.value) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            size: 16,
+                            color: Colors.green,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Location sharing active',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }),
               ], icon: Icons.access_time),
               const SizedBox(height: 24),
 

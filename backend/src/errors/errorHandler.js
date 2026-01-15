@@ -50,22 +50,40 @@ const sendErrorProd = (err, res) => {
 };
 
 const errorHandler = (err, req, res, next) => {
+  // Ensure response hasn't been sent
+  if (res.headersSent) {
+    return next(err);
+  }
+
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
 
-  if (process.env.NODE_ENV === 'development') {
-    sendErrorDev(err, res);
-  } else {
-    let error = { ...err };
-    error.message = err.message;
+  try {
+    if (process.env.NODE_ENV === 'development') {
+      sendErrorDev(err, res);
+    } else {
+      let error = { ...err };
+      error.message = err.message;
 
-    if (error.name === 'CastError') error = handleCastErrorDB(error);
-    if (error.code === 11000) error = handleDuplicateFieldsDB(error);
-    if (error.name === 'ValidationError') error = handleValidationErrorDB(error);
-    if (error.name === 'JsonWebTokenError') error = handleJWTError();
-    if (error.name === 'TokenExpiredError') error = handleJWTExpiredError();
+      if (error.name === 'CastError') error = handleCastErrorDB(error);
+      if (error.code === 11000) error = handleDuplicateFieldsDB(error);
+      if (error.name === 'ValidationError') error = handleValidationErrorDB(error);
+      if (error.name === 'JsonWebTokenError') error = handleJWTError();
+      if (error.name === 'TokenExpiredError') error = handleJWTExpiredError();
 
-    sendErrorProd(error, res);
+      sendErrorProd(error, res);
+    }
+  } catch (handlerError) {
+    // If error handler itself fails, send a basic error response
+    console.error('❌ Error handler failed:', handlerError);
+    console.error('❌ Original error:', err);
+    
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'An unexpected error occurred'
+      });
+    }
   }
 };
 

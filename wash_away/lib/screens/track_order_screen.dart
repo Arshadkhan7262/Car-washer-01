@@ -7,6 +7,7 @@ import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
 import '../features/bookings/services/booking_service.dart';
 import '../controllers/book_controller.dart';
+import 'washer_tracking_map_screen.dart';
 
 class AppColors {
   // Primary color used for the header background and active status.
@@ -406,81 +407,168 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
 
   Widget _buildColoredSection(Color textColor) {
     final bool isDarkTheme = Theme.of(Get.context!).brightness == Brightness.dark;
-    return Container(
-      height: 200,
-      width: double.infinity,
-      padding: EdgeInsets.all(1),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness==Brightness.dark? Color(0xff4E76E1).withValues(alpha: 0.3): Color(0xff4E76E1).withValues(alpha: .3), // Keep the light blue background
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Center(
-            child: Container(
-              width: 90,
-              height: 70,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDarkTheme ? DarkTheme.card : LightTheme.card,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 5,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+    return GestureDetector(
+      onTap: () {
+        // Navigate to map screen when image is clicked
+        // IMPORTANT: Using booking address coordinates (from selected address during booking)
+        // NOT device's current location. This is the service location the customer selected
+        // from their saved addresses dropdown in stage 3 of booking.
+        if (trackingData != null) {
+          // Get address coordinates from booking (the address selected during booking)
+          final customerLat = trackingData!['address_latitude'];
+          final customerLng = trackingData!['address_longitude'];
+          final address = trackingData!['address']?.toString() ?? 'Location';
+          final washerName = trackingData!['washer_name']?.toString();
+          
+          // DEBUG: Log coordinates being passed to map
+          developer.log('📍 [TrackOrderScreen] Opening map with booking address coordinates:');
+          developer.log('   Address: $address');
+          developer.log('   Latitude: $customerLat');
+          developer.log('   Longitude: $customerLng');
+          developer.log('   Tracking Data Keys: ${trackingData!.keys.toList()}');
+          
+          // Verify we have address coordinates (should always be present if address was selected from dropdown)
+          if (customerLat == null || customerLng == null) {
+            developer.log('❌ [TrackOrderScreen] Missing coordinates!');
+            developer.log('   Full tracking data: $trackingData');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Address location not available. Please ensure you selected an address during booking.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 3),
               ),
-              child: Image.asset(
-                'assets/images/send1.png',
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return Icon(
-                    Icons.send,
-                    size: 30,
-                    color: isDarkTheme ? DarkTheme.textPrimary : LightTheme.textPrimary,
+            );
+            return;
+          }
+          
+          // Convert coordinates to double
+          final customerLatDouble = customerLat is num ? customerLat.toDouble() : double.tryParse(customerLat.toString());
+          final customerLngDouble = customerLng is num ? customerLng.toDouble() : double.tryParse(customerLng.toString());
+          
+          if (customerLatDouble == null || customerLngDouble == null) {
+            developer.log('❌ [TrackOrderScreen] Failed to parse coordinates!');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Invalid address coordinates. Please try again.'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 3),
+              ),
+            );
+            return;
+          }
+          
+          developer.log('✅ [TrackOrderScreen] Navigating to map with coordinates: $customerLatDouble, $customerLngDouble');
+          
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WasherTrackingMapScreen(
+                bookingId: widget.bookingId,
+                // These are the coordinates of the address selected during booking (from dropdown)
+                customerLatitude: customerLatDouble,
+                customerLongitude: customerLngDouble,
+                customerAddress: address,
+                washerName: washerName,
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Loading tracking data...'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      child: Container(
+        height: 200,
+        width: double.infinity,
+        padding: EdgeInsets.all(1),
+        decoration: BoxDecoration(
+          color: Theme.of(context).brightness==Brightness.dark? Color(0xff4E76E1).withValues(alpha: 0.3): Color(0xff4E76E1).withValues(alpha: .3), // Keep the light blue background
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Center(
+              child: Container(
+                width: 90,
+                height: 70,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDarkTheme ? DarkTheme.card : LightTheme.card,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 5,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  'assets/images/send1.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      Icons.send,
+                      size: 30,
+                      color: isDarkTheme ? DarkTheme.textPrimary : LightTheme.textPrimary,
+                    );
+                  },
+                ),
+              ),
+            ),
+            SizedBox(height: 10,),
+            Text(
+              'Live Tracking',
+              style: AppStyles.bodyText.copyWith(
+                color: isDarkTheme ? DarkTheme.textPrimary : LightTheme.textPrimary,
+              ),
+            ),
+            SizedBox(height: 4),
+            Builder(
+              builder: (context) {
+                final lastUpdate = _lastUpdateTime;
+                if (lastUpdate != null) {
+                  final now = DateTime.now();
+                  final diff = now.difference(lastUpdate);
+                  String timeText;
+                  if (diff.inSeconds < 10) {
+                    timeText = 'Just now';
+                  } else if (diff.inSeconds < 60) {
+                    timeText = 'Updated ${diff.inSeconds}s ago';
+                  } else {
+                    timeText = 'Updated ${diff.inMinutes}m ago';
+                  }
+                  return Text(
+                    timeText,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: isDarkTheme 
+                          ? DarkTheme.textTertiary 
+                          : LightTheme.textTertiary,
+                    ),
                   );
-                },
+                }
+                return SizedBox.shrink();
+              },
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Tap to view on map',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: isDarkTheme 
+                    ? DarkTheme.textTertiary 
+                    : LightTheme.textTertiary,
+                fontStyle: FontStyle.italic,
               ),
             ),
-          ),
-          SizedBox(height: 10,),
-          Text(
-            'Live Tracking',
-            style: AppStyles.bodyText.copyWith(
-              color: isDarkTheme ? DarkTheme.textPrimary : LightTheme.textPrimary,
-            ),
-          ),
-          SizedBox(height: 4),
-          Builder(
-            builder: (context) {
-              final lastUpdate = _lastUpdateTime;
-              if (lastUpdate != null) {
-                final now = DateTime.now();
-                final diff = now.difference(lastUpdate);
-                String timeText;
-                if (diff.inSeconds < 10) {
-                  timeText = 'Just now';
-                } else if (diff.inSeconds < 60) {
-                  timeText = 'Updated ${diff.inSeconds}s ago';
-                } else {
-                  timeText = 'Updated ${diff.inMinutes}m ago';
-                }
-                return Text(
-                  timeText,
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: isDarkTheme 
-                        ? DarkTheme.textTertiary 
-                        : LightTheme.textTertiary,
-                  ),
-                );
-              }
-              return SizedBox.shrink();
-            },
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

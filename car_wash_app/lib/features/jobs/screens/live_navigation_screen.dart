@@ -32,6 +32,7 @@ class _LiveNavigationScreenState extends State<LiveNavigationScreen> {
   Position? _currentPosition;
   LatLng? _customerLocation;
   StreamSubscription<Position>? _positionStream;
+  Timer? _updateTimer; // Timer to update map every 3 seconds
   double _distanceInKm = 0.0;
   bool _isLoading = true;
   String? _errorMessage;
@@ -234,7 +235,7 @@ class _LiveNavigationScreenState extends State<LiveNavigationScreen> {
       _positionStream = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          distanceFilter: 10, // Update every 10 meters
+          distanceFilter: 5, // Update every 5 meters for more frequent updates
         ),
       ).listen(
         (Position position) {
@@ -256,6 +257,19 @@ class _LiveNavigationScreenState extends State<LiveNavigationScreen> {
           }
         },
       );
+
+      // Set up timer to update map and distance every 3 seconds
+      // This ensures the map refreshes even if position doesn't change significantly
+      _updateTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        if (_currentPosition != null) {
+          _updateDistance();
+          _updateMapCamera();
+        }
+      });
     } catch (e) {
       setState(() {
         _errorMessage = 'Error getting location: $e';
@@ -272,9 +286,15 @@ class _LiveNavigationScreenState extends State<LiveNavigationScreen> {
         _customerLocation!.latitude,
         _customerLocation!.longitude,
       );
+      final distanceInKm = distance / 1000; // Convert to kilometers
+      
       setState(() {
-        _distanceInKm = distance / 1000; // Convert to kilometers
+        _distanceInKm = distanceInKm;
       });
+      
+      print('📍 [LiveNavigation] Distance updated: ${distanceInKm.toStringAsFixed(2)} km');
+      print('   Washer: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}');
+      print('   Customer: ${_customerLocation!.latitude}, ${_customerLocation!.longitude}');
     }
   }
 
@@ -349,7 +369,9 @@ class _LiveNavigationScreenState extends State<LiveNavigationScreen> {
   }
 
   @override
+  @override
   void dispose() {
+    _updateTimer?.cancel();
     _positionStream?.cancel();
     _mapController?.dispose();
     super.dispose();

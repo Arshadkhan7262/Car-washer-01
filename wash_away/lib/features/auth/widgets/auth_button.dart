@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wash_away/themes/dark_theme.dart';
 import 'package:wash_away/themes/light_theme.dart';
+import '../controllers/auth_controller.dart';
 
 // The 'Main Button' used in Reset, Login, and Signup
 Widget mainButton(String text, VoidCallback onPressed, {bool isLoading = false}) {
@@ -42,10 +43,11 @@ Widget mainButton(String text, VoidCallback onPressed, {bool isLoading = false})
 // The 'Google Button' from your auth.png
 Widget googleButton() {
   final bool isDarkTheme = Theme.of(Get.context!).brightness == Brightness.dark;
+  final authController = Get.find<AuthController>();
   
-  return OutlinedButton(
-    onPressed: () {
-      // TODO: Implement Google Sign In (Firebase Auth)
+  return Obx(() => OutlinedButton(
+    onPressed: authController.isLoggingIn.value ? null : () async {
+      await authController.loginWithGoogle();
     },
     style: OutlinedButton.styleFrom(
       fixedSize: const Size(double.infinity, 55),
@@ -81,6 +83,6 @@ Widget googleButton() {
         ),
       ],
     ),
-  );
+  ));
 }
 
