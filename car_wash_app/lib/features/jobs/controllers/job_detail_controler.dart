@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../models/job_detail_model.dart';
 import '../services/jobs_service.dart';
 import '../services/location_tracker.dart';
+import '../../home/controllers/home_controller.dart';
+import '../../jobs/controllers/jobs_controller.dart';
 
 class JobDetailController extends GetxController {
   final String jobId;
@@ -257,6 +259,20 @@ class JobDetailController extends GetxController {
         _manageLocationTracking();
         // Refresh job details silently in background to sync with backend
         fetchJobDetails();
+        
+        // Refresh jobs list to update status
+        if (Get.isRegistered<JobController>()) {
+          final jobController = Get.find<JobController>();
+          jobController.fetchJobs(silent: true);
+        }
+        
+        // If job is completed, refresh home earnings instantly
+        if (nextStep == JobStep.completed || status == 'completed') {
+          if (Get.isRegistered<HomeController>()) {
+            final homeController = Get.find<HomeController>();
+            homeController.loadDashboardData();
+          }
+        }
       } else {
         // Revert optimistic update on failure
         await fetchJobDetails();
@@ -404,6 +420,18 @@ class JobDetailController extends GetxController {
       if (success) {
         // Refresh job details silently in background to sync with backend
         fetchJobDetails();
+        
+        // Refresh jobs list to update status
+        if (Get.isRegistered<JobController>()) {
+          final jobController = Get.find<JobController>();
+          await jobController.fetchJobs(silent: true);
+        }
+        
+        // Refresh home screen earnings instantly
+        if (Get.isRegistered<HomeController>()) {
+          final homeController = Get.find<HomeController>();
+          await homeController.loadDashboardData();
+        }
       } else {
         // Revert optimistic update on failure
         await fetchJobDetails();

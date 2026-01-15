@@ -38,16 +38,21 @@ export const getDashboardStats = async (userId) => {
       }
     });
 
-    // Get today's earnings (from completed and paid bookings)
+    // Get today's earnings from ALL assigned bookings (not just completed)
+    // This includes: pending, accepted, on_the_way, arrived, in_progress, completed
+    // Only count paid bookings
     const todayEarningsData = await Booking.aggregate([
       {
         $match: {
           washer_id: washerId,
-          status: 'completed',
-          payment_status: 'paid',
+          payment_status: 'paid', // Only count paid bookings
           created_date: {
             $gte: today,
             $lt: tomorrow
+          },
+          // Include all statuses where washer is assigned (not cancelled)
+          status: {
+            $in: ['pending', 'accepted', 'on_the_way', 'arrived', 'in_progress', 'completed']
           }
         }
       },

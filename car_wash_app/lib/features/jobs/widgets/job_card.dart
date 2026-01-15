@@ -18,22 +18,39 @@ class JobCard extends StatelessWidget {
     try {
       final success = await _jobsService.acceptJob(job.id);
       if (success) {
-        Get.find<JobController>().fetchJobs();
-        Get.snackbar('Success', 'Job accepted successfully',
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.green,
-            colorText: Colors.white);
+        final jobController = Get.find<JobController>();
+        
+        // Refresh jobs to get updated status
+        await jobController.fetchJobs();
+        
+        // Navigate to active tab since job is now accepted
+        jobController.changeTab(JobStatus.active);
+        
+        Get.snackbar(
+          'Success', 
+          'Job accepted successfully',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2),
+        );
       } else {
-        Get.snackbar('Error', 'Failed to accept job',
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.red,
-            colorText: Colors.white);
-      }
-    } catch (e) {
-      Get.snackbar('Error', 'Error accepting job: $e',
+        Get.snackbar(
+          'Error', 
+          'Failed to accept job',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.red,
-          colorText: Colors.white);
+          colorText: Colors.white,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Error', 
+        'Error accepting job: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     }
   }
 

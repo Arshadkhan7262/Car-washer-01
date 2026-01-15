@@ -18,7 +18,7 @@ class StatsGrid extends StatelessWidget {
           child: Obx(
             () => _buildStatCard(
               title: "Today's Jobs",
-              value: "\$${controller.earnings.value.toStringAsFixed(2)}",
+              value: "${controller.jobsCount.value}",
               subtitle: "${controller.jobsCount.value} total completed",
               ImagePath: Image.asset(AppImages.selectedJobs),
               isPositive: false,

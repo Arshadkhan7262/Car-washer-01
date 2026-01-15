@@ -409,70 +409,8 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
     final bool isDarkTheme = Theme.of(Get.context!).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () {
-        // Navigate to map screen when image is clicked
-        // IMPORTANT: Using booking address coordinates (from selected address during booking)
-        // NOT device's current location. This is the service location the customer selected
-        // from their saved addresses dropdown in stage 3 of booking.
-        if (trackingData != null) {
-          // Get address coordinates from booking (the address selected during booking)
-          final customerLat = trackingData!['address_latitude'];
-          final customerLng = trackingData!['address_longitude'];
-          final address = trackingData!['address']?.toString() ?? 'Location';
-          final washerName = trackingData!['washer_name']?.toString();
-          
-          // DEBUG: Log coordinates being passed to map
-          developer.log('📍 [TrackOrderScreen] Opening map with booking address coordinates:');
-          developer.log('   Address: $address');
-          developer.log('   Latitude: $customerLat');
-          developer.log('   Longitude: $customerLng');
-          developer.log('   Tracking Data Keys: ${trackingData!.keys.toList()}');
-          
-          // Verify we have address coordinates (should always be present if address was selected from dropdown)
-          if (customerLat == null || customerLng == null) {
-            developer.log('❌ [TrackOrderScreen] Missing coordinates!');
-            developer.log('   Full tracking data: $trackingData');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Address location not available. Please ensure you selected an address during booking.'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 3),
-              ),
-            );
-            return;
-          }
-          
-          // Convert coordinates to double
-          final customerLatDouble = customerLat is num ? customerLat.toDouble() : double.tryParse(customerLat.toString());
-          final customerLngDouble = customerLng is num ? customerLng.toDouble() : double.tryParse(customerLng.toString());
-          
-          if (customerLatDouble == null || customerLngDouble == null) {
-            developer.log('❌ [TrackOrderScreen] Failed to parse coordinates!');
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Invalid address coordinates. Please try again.'),
-                backgroundColor: Colors.red,
-                duration: Duration(seconds: 3),
-              ),
-            );
-            return;
-          }
-          
-          developer.log('✅ [TrackOrderScreen] Navigating to map with coordinates: $customerLatDouble, $customerLngDouble');
-          
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => WasherTrackingMapScreen(
-                bookingId: widget.bookingId,
-                // These are the coordinates of the address selected during booking (from dropdown)
-                customerLatitude: customerLatDouble,
-                customerLongitude: customerLngDouble,
-                customerAddress: address,
-                washerName: washerName,
-              ),
-            ),
-          );
-        } else {
+        // Check if tracking data is available
+        if (trackingData == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Loading tracking data...'),
@@ -480,7 +418,87 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
               duration: const Duration(seconds: 2),
             ),
           );
+          return;
         }
+
+        // Check if washer is assigned - prevent map opening if no washer assigned
+        final washerName = trackingData!['washer_name']?.toString();
+        final washerId = trackingData!['washer_id'];
+        
+        if (washerName == null || washerName.isEmpty || washerId == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Waiting for washer assignment. Map will be available once a washer is assigned to your booking.'),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          return;
+        }
+
+        // Navigate to map screen when image is clicked
+        // IMPORTANT: Using booking address coordinates (from selected address during booking)
+        // NOT device's current location. This is the service location the customer selected
+        // from their saved addresses dropdown in stage 3 of booking.
+        
+        // Get address coordinates from booking (the address selected during booking)
+        final customerLat = trackingData!['address_latitude'];
+        final customerLng = trackingData!['address_longitude'];
+        final address = trackingData!['address']?.toString() ?? 'Location';
+        
+        // DEBUG: Log coordinates being passed to map
+        developer.log('📍 [TrackOrderScreen] Opening map with booking address coordinates:');
+        developer.log('   Address: $address');
+        developer.log('   Latitude: $customerLat');
+        developer.log('   Longitude: $customerLng');
+        developer.log('   Washer: $washerName');
+        developer.log('   Tracking Data Keys: ${trackingData!.keys.toList()}');
+        
+        // Verify we have address coordinates (should always be present if address was selected from dropdown)
+        if (customerLat == null || customerLng == null) {
+          developer.log('❌ [TrackOrderScreen] Missing coordinates!');
+          developer.log('   Full tracking data: $trackingData');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Address location not available. Please ensure you selected an address during booking.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          return;
+        }
+        
+        // Convert coordinates to double
+        final customerLatDouble = customerLat is num ? customerLat.toDouble() : double.tryParse(customerLat.toString());
+        final customerLngDouble = customerLng is num ? customerLng.toDouble() : double.tryParse(customerLng.toString());
+        
+        if (customerLatDouble == null || customerLngDouble == null) {
+          developer.log('❌ [TrackOrderScreen] Failed to parse coordinates!');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Invalid address coordinates. Please try again.'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          return;
+        }
+        
+        developer.log('✅ [TrackOrderScreen] Navigating to map with coordinates: $customerLatDouble, $customerLngDouble');
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WasherTrackingMapScreen(
+              bookingId: widget.bookingId,
+              // These are the coordinates of the address selected during booking (from dropdown)
+              customerLatitude: customerLatDouble,
+              customerLongitude: customerLngDouble,
+              customerAddress: address,
+              washerName: washerName,
+            ),
+          ),
+        );
       },
       child: Container(
         height: 200,

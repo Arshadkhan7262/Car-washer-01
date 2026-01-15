@@ -3,6 +3,8 @@ import 'dart:async';
 import '../../features/auth/services/auth_service.dart';
 import 'widgets/suspended_account_overlay.dart';
 import 'services/location_initialization_service.dart';
+import '../../features/home/controllers/home_controller.dart';
+import '../../features/jobs/controllers/jobs_controller.dart';
 
 class DashboardController extends GetxController {
   final RxInt currentIndex = 0.obs;
@@ -98,5 +100,22 @@ class DashboardController extends GetxController {
 
   void changeIndex(int index) {
     currentIndex.value = index;
+    
+    // Refresh home screen data when navigating to home tab
+    if (index == 0) {
+      // Home tab selected - refresh earnings and stats
+      if (Get.isRegistered<HomeController>()) {
+        final homeController = Get.find<HomeController>();
+        homeController.loadDashboardData();
+      }
+    }
+    
+    // Refresh jobs when navigating to jobs tab
+    if (index == 1) {
+      if (Get.isRegistered<JobController>()) {
+        final jobController = Get.find<JobController>();
+        jobController.fetchJobs();
+      }
+    }
   }
 }
