@@ -503,9 +503,15 @@ class AuthService {
 
       log('✅ [loginWithGoogle] Login completed successfully');
 
+      // Get email_verified from response
+      final emailVerified = responseData['email_verified'] ?? user['email_verified'] ?? false;
+      
       return {
         'success': true,
-        'user': user,
+        'user': {
+          ...user,
+          'email_verified': emailVerified,
+        },
         'token': token,
         'message': 'Login successful',
       };

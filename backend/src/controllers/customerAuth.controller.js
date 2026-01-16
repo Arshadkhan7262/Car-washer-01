@@ -369,30 +369,4 @@ export const logout = async (req, res, next) => {
   }
 };
 
-/**
- * @desc    Login/Register customer with Google OAuth
- * @route   POST /api/v1/customer/auth/google
- * @access  Public
- */
-export const loginWithGoogle = async (req, res, next) => {
-  try {
-    const { idToken } = req.body;
-
-    if (!idToken) {
-      return res.status(400).json({
-        success: false,
-        message: 'Google ID token is required'
-      });
-    }
-
-    const result = await customerAuthService.loginWithGoogle(idToken);
-
-    res.status(200).json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 

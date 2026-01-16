@@ -10,6 +10,7 @@ import serviceRoutes from './service.routes.js';
 import customerRoutes from './customer.routes.js';
 import washerRoutes from './washer.routes.js';
 import couponRoutes from './coupon.routes.js';
+import adminNotificationRoutes from './adminNotification.routes.js';
 
 // Washer App Screen-specific routes
 import washerHomeRoutes from './washerHome.routes.js';
@@ -43,6 +44,7 @@ router.use('/admin/services', serviceRoutes);
 router.use('/admin/customers', customerRoutes);
 router.use('/admin/washers', washerRoutes);
 router.use('/admin/coupons', couponRoutes);
+router.use('/admin/notifications', adminNotificationRoutes); // Notifications: send push notifications
 
 // Washer App Screen-specific API routes
 router.use('/washer/home', washerHomeRoutes); // Home screen: dashboard stats
@@ -70,6 +72,8 @@ router.use('/customer/addresses', customerAddressRoutes); // Addresses: customer
 router.use('/customer/vehicles', customerVehicleRoutes); // Vehicles: customer vehicle management
 import customerCouponRoutes from './customerCoupon.routes.js';
 router.use('/customer/coupons', customerCouponRoutes); // Coupons: customer coupon validation
+import customerNotificationRoutes from './customerNotification.routes.js';
+router.use('/customer/notifications', customerNotificationRoutes); // Notifications: FCM token management
 
 // Admin Vehicle Type routes
 import vehicleTypeRoutes from './vehicleType.routes.js';

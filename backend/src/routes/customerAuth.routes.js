@@ -21,7 +21,6 @@ const router = express.Router();
 // Primary routes matching UI flow
 router.post('/register', customerAuthController.registerWithEmail);
 router.post('/login', customerAuthController.loginWithEmail);
-router.post('/google', customerAuthController.loginWithGoogle);
 router.post('/send-email-otp', customerAuthController.requestEmailOTP);
 router.post('/verify-email-otp', customerAuthController.verifyEmailOTP);
 router.post('/forgot-password', customerAuthController.requestPasswordReset);

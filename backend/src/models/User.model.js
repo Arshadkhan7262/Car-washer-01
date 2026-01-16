@@ -95,13 +95,34 @@ const userSchema = new mongoose.Schema({
   preferences: {
     push_notification_enabled: {
       type: Boolean,
-      default: false
+      default: true
     },
     two_factor_auth_enabled: {
       type: Boolean,
       default: false
     }
   },
+  // FCM Tokens for push notifications (array to support multiple devices)
+  fcm_tokens: [{
+    token: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    device_type: {
+      type: String,
+      enum: ['android', 'ios', 'web'],
+      default: 'android'
+    },
+    created_at: {
+      type: Date,
+      default: Date.now
+    },
+    updated_at: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   // Gold member status (for wash_away app)
   is_gold_member: {
     type: Boolean,

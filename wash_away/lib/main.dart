@@ -1,7 +1,9 @@
 
+import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'features/auth/auth_binding.dart';
 import 'features/auth/screens/login_screen.dart';
@@ -15,8 +17,19 @@ import 'controllers/theme_controller.dart';
 import 'themes/dark_theme.dart';
 import 'themes/light_theme.dart';
 import 'features/auth/services/auth_service.dart';
+import 'features/notifications/services/notification_handler_service.dart';
+import 'features/notifications/controllers/notification_controller.dart';
 // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 // import 'features/bookings/services/draft_booking_service.dart';
+
+// Background message handler (must be top-level function)
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  log('📱 [Background] Received notification: ${message.messageId}');
+  log('📱 [Background] Title: ${message.notification?.title}');
+  log('📱 [Background] Body: ${message.notification?.body}');
+  log('📱 [Background] Data: ${message.data}');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +40,10 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     print('✅ Firebase initialized successfully');
+    
+    // Set up background message handler
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    
   } catch (e) {
     print('❌ Firebase initialization error: $e');
     // Continue app execution even if Firebase fails (fallback will handle it)
@@ -50,6 +67,21 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _checkAuthStatus();
+    // Initialize notification handlers after app starts
+    _initializeNotifications();
+  }
+
+  Future<void> _initializeNotifications() async {
+    // Wait a bit for GetX to be ready
+    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      // Initialize notification controller first
+      Get.put(NotificationController());
+      // Then initialize the handler service
+      await NotificationHandlerService().initialize();
+    } catch (e) {
+      log('❌ Error initializing notifications: $e');
+    }
   }
 
   Future<void> _checkAuthStatus() async {

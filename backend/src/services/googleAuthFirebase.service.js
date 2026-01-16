@@ -5,12 +5,23 @@
  * When Google Identity Services (GIS) is enabled, the Flutter app signs in via Firebase
  * and sends a Firebase ID Token to the backend. This service verifies the token using
  * Firebase Admin SDK and manages user records in MongoDB.
+ * 
+ * Registration flow matches email registration:
+ * - Customers: is_active=true, email_verified=false, OTP email sent
+ * - Washers: is_active=true, email_verified=false, Washer profile created with status='pending', OTP email sent
  */
 
 import User from '../models/User.model.js';
+import Washer from '../models/Washer.model.js';
 import AppError from '../errors/AppError.js';
 import { verifyFirebaseTokenForGoogle } from '../config/firebase.config.js';
 import { generateAccessToken, generateRefreshToken } from '../config/jwt.config.js';
+import emailService from './email.service.js';
+
+// Generate 4-digit OTP (same as email registration)
+const generateEmailOTP = () => {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+};
 
 /**
  * Login or register user with Firebase ID Token (Google Sign-In)
@@ -70,9 +81,7 @@ export const googleLoginWithFirebase = async (idToken, role) => {
     if (user.email !== normalizedEmail) {
       user.email = normalizedEmail;
     }
-    if (!user.email_verified) {
-      user.email_verified = firebaseUser.emailVerified;
-    }
+    // Don't update email_verified from Firebase - keep existing status (same as email registration)
     if (user.provider !== 'google') {
       user.provider = 'google';
     }
@@ -99,20 +108,39 @@ export const googleLoginWithFirebase = async (idToken, role) => {
         throw new AppError('This email is already registered with a different Google account', 400);
       }
       
+      // Link Google account to existing email account
       existingEmailUser.firebaseUid = firebaseUser.uid;
-      existingEmailUser.email_verified = firebaseUser.emailVerified;
+      existingEmailUser.googleId = firebaseUser.uid;
+      
+      // Keep existing email_verified status (don't overwrite if already verified)
+      // Only set to verified if Firebase says it's verified AND user hasn't verified yet
+      if (firebaseUser.emailVerified && !existingEmailUser.email_verified) {
+        existingEmailUser.email_verified = true;
+      }
+      
+      // Update name only if not set
       if (firebaseUser.name && !existingEmailUser.name) {
         existingEmailUser.name = firebaseUser.name;
       }
-      if (firebaseUser.photoURL) {
+      
+      // Update profile picture if available and not set
+      if (firebaseUser.photoURL && !existingEmailUser.profilePicture) {
         existingEmailUser.profilePicture = firebaseUser.photoURL;
         existingEmailUser.avatar = firebaseUser.photoURL;
       }
-      existingEmailUser.provider = 'google';
+      
+      // Keep original provider (email) - user can login with both email/password and Google
+      // Only set to 'google' if it was null/undefined
+      if (!existingEmailUser.provider) {
+        existingEmailUser.provider = 'google';
+      }
+      
       existingEmailUser.lastLogin = new Date();
       
       await existingEmailUser.save();
       user = existingEmailUser;
+      
+      console.log(`✅ Linked Google account to existing email account: ${normalizedEmail}`);
     } else {
       // Check if email exists with different role
       const existingEmailDifferentRole = await User.findOne({ 
@@ -127,7 +155,7 @@ export const googleLoginWithFirebase = async (idToken, role) => {
       // In production, you might want to require phone separately
       const phonePlaceholder = `google_${firebaseUser.uid.substring(0, 10)}`;
 
-      // Create new user with Google OAuth via Firebase
+      // Create new user with Google OAuth via Firebase (same flow as email registration)
       user = await User.create({
         name: userName,
         email: normalizedEmail,
@@ -139,12 +167,59 @@ export const googleLoginWithFirebase = async (idToken, role) => {
         avatar: firebaseUser.photoURL || null,
         role: role,
         provider: 'google',
-        email_verified: firebaseUser.emailVerified,
+        email_verified: false, // Same as email registration - not verified initially
         phone_verified: false,
-        is_active: true,
+        is_active: true, // Customers and washers are active by default (same as email)
         is_blocked: false,
+        wallet_balance: 0, // Explicitly set wallet balance (same as email registration)
+        preferences: { // Explicitly set preferences (same as email registration)
+          push_notification_enabled: true, // Default to true for push notifications
+          two_factor_auth_enabled: false
+        },
         lastLogin: new Date()
       });
+
+      // Generate and send OTP email automatically after registration (same as email registration)
+      const otpCode = generateEmailOTP();
+      const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      user.otp = {
+        code: String(otpCode).trim(), // Ensure OTP is stored as trimmed string
+        expiresAt: otpExpires
+      };
+      await user.save();
+
+      console.log(`📧 Generated OTP for ${normalizedEmail} (Google Sign-In): "${otpCode}" (stored as: "${user.otp.code}")`);
+
+      // Send OTP email asynchronously (non-blocking - same as email registration)
+      emailService.sendOTPEmail(normalizedEmail, otpCode, userName || (role === 'washer' ? 'Washer' : 'Customer'), role)
+        .then(() => {
+          console.log(`✅ Registration OTP email sent to ${normalizedEmail} (Google Sign-In)`);
+        })
+        .catch((emailError) => {
+          console.error(`❌ Failed to send registration OTP email to ${normalizedEmail}:`, emailError);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`📧 Development mode - Registration OTP: ${otpCode}`);
+          }
+          // Don't throw error - registration succeeds even if email fails
+        });
+
+      // For washers, create washer profile with 'pending' status (same as email registration)
+      if (role === 'washer') {
+        // Check if washer profile already exists (shouldn't happen, but safety check)
+        const existingWasher = await Washer.findOne({ user_id: user._id });
+        if (!existingWasher) {
+          await Washer.create({
+            user_id: user._id,
+            name: userName,
+            phone: phonePlaceholder,
+            email: normalizedEmail,
+            status: 'pending', // Start as pending - admin must approve (same as email registration)
+            online_status: false
+          });
+          console.log(`✅ Washer profile created with pending status for ${normalizedEmail}`);
+        }
+      }
     }
   }
 
@@ -153,27 +228,63 @@ export const googleLoginWithFirebase = async (idToken, role) => {
     throw new AppError('Your account has been deactivated. Please contact support.', 403);
   }
 
-  // Generate JWT tokens
-  const token = generateAccessToken(user._id, user.role);
-  const refreshToken = generateRefreshToken(user._id, user.role);
+  // Generate JWT tokens (same format as email registration)
+  // Convert user to plain object to avoid Mongoose document issues
+  // Extract values and ensure they are plain primitives
+  const userId = user._id ? String(user._id.toString()) : '';
+  const userEmail = user.email ? String(user.email) : '';
+  const userPhone = user.phone ? String(user.phone) : '';
+  const userRole = user.role ? String(user.role) : 'customer';
 
-  // Prepare response
+  // Create plain object payload (ensure all values are primitives - no Mongoose types)
+  const tokenPayload = {
+    id: userId,
+    email: userEmail,
+    phone: userPhone,
+    role: userRole
+  };
+
+  // Validate payload before signing
+  if (!tokenPayload.id || !tokenPayload.email || !tokenPayload.role) {
+    console.error('❌ Invalid token payload:', {
+      id: tokenPayload.id,
+      email: tokenPayload.email,
+      phone: tokenPayload.phone,
+      role: tokenPayload.role,
+      userIdType: typeof userId,
+      userEmailType: typeof userEmail
+    });
+    throw new AppError('Invalid user data for token generation', 500);
+  }
+
+  // Ensure payload is a plain object (not a Mongoose document)
+  const plainPayload = JSON.parse(JSON.stringify(tokenPayload));
+
+  const accessToken = generateAccessToken(plainPayload);
+  const refreshToken = generateRefreshToken(plainPayload);
+
+  // Prepare response (same format as email registration)
   return {
+    token: accessToken,
+    refreshToken: refreshToken,
+    email: normalizedEmail,
+    email_verified: user.email_verified,
+    status: user.is_active ? 'active' : 'inactive',
     user: {
-      id: user._id,
+      id: user._id.toString(),
       name: user.name,
-      email: user.email,
       phone: user.phone,
+      email: user.email,
       role: user.role,
       profileImage: user.profilePicture || user.avatar || null,
       authProvider: user.provider,
-      email_verified: user.email_verified,
       phone_verified: user.phone_verified,
+      email_verified: user.email_verified,
+      wallet_balance: user.wallet_balance || 0,
       createdAt: user.created_date,
       lastLogin: user.lastLogin
     },
-    token,
-    refreshToken
+    message: 'Account created successfully. Welcome email with OTP has been sent to your inbox.'
   };
 };
 

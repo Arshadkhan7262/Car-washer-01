@@ -421,6 +421,20 @@ class Base44Client {
         },
       },
     }
+
+    this.notifications = {
+      send: async (data) => {
+        const response = await fetchWithAuth(`${API_BASE_URL}/admin/notifications/send`, {
+          method: 'POST',
+          body: JSON.stringify(data),
+        })
+        const result = await response.json()
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || result.error?.message || 'Failed to send notification')
+        }
+        return result
+      },
+    }
   }
 }
 

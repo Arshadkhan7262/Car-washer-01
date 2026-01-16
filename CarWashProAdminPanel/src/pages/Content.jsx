@@ -46,6 +46,13 @@ export default function Content() {
     action_value: '', display_order: 0, start_date: '', end_date: '', is_active: true
   });
 
+  // Notification form state
+  const [notificationForm, setNotificationForm] = useState({
+    target_audience: 'all',
+    title: '',
+    message: ''
+  });
+
   const { data: banners = [], isLoading } = useQuery({
     queryKey: ['banners'],
     queryFn: () => base44.entities.Banner.list('display_order'),
@@ -64,6 +71,19 @@ export default function Content() {
   const deleteBannerMutation = useMutation({
     mutationFn: (id) => base44.entities.Banner.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['banners'] })
+  });
+
+  const sendNotificationMutation = useMutation({
+    mutationFn: (data) => base44.notifications.send(data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      setNotificationForm({ target_audience: 'all', title: '', message: '' });
+      // Show success message (you can use toast library here)
+      alert(`Notification sent successfully! ${result.data?.message || ''}`);
+    },
+    onError: (error) => {
+      alert(`Failed to send notification: ${error.message}`);
+    }
   });
 
   const openBannerModal = (banner = null) => {
@@ -191,7 +211,10 @@ export default function Content() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Target Audience</Label>
-                <Select defaultValue="all">
+                <Select 
+                  value={notificationForm.target_audience}
+                  onValueChange={(value) => setNotificationForm({ ...notificationForm, target_audience: value })}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -205,15 +228,38 @@ export default function Content() {
               </div>
               <div className="space-y-2">
                 <Label>Title</Label>
-                <Input placeholder="Special Offer!" />
+                <Input 
+                  placeholder="Special Offer!" 
+                  value={notificationForm.title}
+                  onChange={(e) => setNotificationForm({ ...notificationForm, title: e.target.value })}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Message</Label>
-                <Textarea placeholder="Get 20% off your next wash..." rows={3} />
+                <Textarea 
+                  placeholder="Get 20% off your next wash..." 
+                  rows={3}
+                  value={notificationForm.message}
+                  onChange={(e) => setNotificationForm({ ...notificationForm, message: e.target.value })}
+                />
               </div>
-              <Button className="w-full">
+              <Button 
+                className="w-full"
+                onClick={() => {
+                  if (!notificationForm.title || !notificationForm.message) {
+                    alert('Please fill in both title and message');
+                    return;
+                  }
+                  sendNotificationMutation.mutate({
+                    target_audience: notificationForm.target_audience,
+                    title: notificationForm.title,
+                    message: notificationForm.message
+                  });
+                }}
+                disabled={sendNotificationMutation.isPending}
+              >
                 <Send className="w-4 h-4 mr-2" />
-                Send Notification
+                {sendNotificationMutation.isPending ? 'Sending...' : 'Send Notification'}
               </Button>
             </CardContent>
           </Card>

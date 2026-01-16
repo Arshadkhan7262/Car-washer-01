@@ -7,6 +7,7 @@ import '../features/vehicles/services/vehicle_type_service.dart';
 import '../models/service_model.dart';
 import '../models/vehicle_type_model.dart';
 import '../services/location_service.dart';
+import '../features/notifications/controllers/fcm_token_controller.dart';
 
 class HomeController extends GetxController {
   // State for Vehicle Type Selection
@@ -41,6 +42,27 @@ class HomeController extends GetxController {
   final LocationService _locationService = LocationService();
   final RxString currentLocation = 'Current Location'.obs;
   final RxBool isLoadingLocation = false.obs;
+
+  /// Request notification permission after location permission is granted
+  Future<void> _requestNotificationPermission() async {
+    try {
+      // Get or create FCM token controller
+      FcmTokenController? fcmController;
+      if (Get.isRegistered<FcmTokenController>()) {
+        fcmController = Get.find<FcmTokenController>();
+      } else {
+        fcmController = Get.put(FcmTokenController());
+      }
+      
+      // Now request notification permission and initialize FCM token
+      if (fcmController != null) {
+        await fcmController.initializeFcmToken();
+        print('✅ [HomeController] Notification permission requested after location permission');
+      }
+    } catch (e) {
+      print('❌ [HomeController] Error requesting notification permission: $e');
+    }
+  }
 
   @override
   void onInit() {
@@ -197,6 +219,13 @@ class HomeController extends GetxController {
           duration: const Duration(seconds: 4),
         );
         return;
+      }
+
+      // If location permission is granted, now request notification permission
+      if (permission == LocationPermission.whileInUse || 
+          permission == LocationPermission.always) {
+        print('📍 [Location] Permission granted, requesting notification permission...');
+        await _requestNotificationPermission();
       }
 
       // Get location place name (city/locality) - e.g., "Sant Pora"

@@ -6,13 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../../notifications/controllers/fcm_token_controller.dart';
 
-/// Authentication Controller
-/// Manages Customer Authentication flow via Backend API
+  /// Authentication Controller
+  /// Manages Customer Authentication flow via Backend API
 class AuthController extends GetxController {
   final AuthService _authService = AuthService();
+  FcmTokenController? _fcmTokenController;
 
   // Observable state variables
   var isLoading = false.obs;
@@ -43,6 +44,9 @@ class AuthController extends GetxController {
 
       isLoggingIn.value = false;
 
+      // Initialize and save FCM token after successful login
+      _initializeFcmToken();
+
       // Success - navigate to dashboard
       // TODO: Update route name when dashboard is ready
       Get.offAllNamed('/dashboard');
@@ -70,6 +74,9 @@ class AuthController extends GetxController {
       final result = await _authService.registerWithEmail(email, password, name, phone);
 
       isRegistering.value = false;
+
+      // Initialize and save FCM token after successful registration
+      _initializeFcmToken();
 
       // Session is saved (tokens stored), but navigate to OTP verification screen
       _email = result['email'];
@@ -131,6 +138,9 @@ class AuthController extends GetxController {
       _resendTimerController?.cancel(); // Stop timer on successful verification
 
       // Tokens are already saved in verifyEmailOTP service method
+      // Initialize and save FCM token after successful OTP verification
+      await _initializeFcmToken();
+      
       // Customers are always active - navigate to dashboard after email verification
       Get.offAllNamed('/dashboard');
       Get.snackbar('Success', result['message'] ?? 'Email verified successfully');
@@ -237,6 +247,28 @@ class AuthController extends GetxController {
   }
 
   /// Start resend timer (60 seconds)
+  /// Initialize FCM token controller and save token to backend
+  /// Note: Permission will be requested after location permission in home screen
+  Future<void> _initializeFcmToken() async {
+    try {
+      // Get or create FCM token controller
+      if (!Get.isRegistered<FcmTokenController>()) {
+        _fcmTokenController = Get.put(FcmTokenController());
+      } else {
+        _fcmTokenController = Get.find<FcmTokenController>();
+      }
+      
+      // Don't request permission here - it will be requested after location permission
+      // Just check if we can get token (if permission already granted)
+      if (_fcmTokenController != null) {
+        await _fcmTokenController!.initializeFcmTokenWithoutPermission();
+        log('✅ [AuthController] FCM token initialization completed (without permission request)');
+      }
+    } catch (e) {
+      log('❌ [AuthController] Error initializing FCM token: $e');
+    }
+  }
+
   void _startResendTimer() {
     _stopResendTimer(); // Clear any existing timer
     
@@ -274,6 +306,10 @@ class AuthController extends GetxController {
   @override
   void onClose() {
     _stopResendTimer();
+    // Remove FCM token controller if exists
+    if (Get.isRegistered<FcmTokenController>()) {
+      Get.delete<FcmTokenController>();
+    }
     super.onClose();
   }
 
@@ -369,32 +405,64 @@ class AuthController extends GetxController {
       log('   User UID: ${userCredential.user!.uid}');
       log('   User Email: ${userCredential.user!.email}');
 
-      // Save user data locally
+      // Get Firebase ID Token to send to backend
       final firebaseUser = userCredential.user!;
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('isLoggedIn', true);
-        await prefs.setString('user_id', firebaseUser.uid);
-        await prefs.setString('user_email', firebaseUser.email ?? '');
-        await prefs.setString('user_name', firebaseUser.displayName ?? '');
-        await prefs.setString('user_phone', firebaseUser.phoneNumber ?? '');
-        await prefs.setString('auth_provider', 'google');
-        await prefs.setString('profile_image', firebaseUser.photoURL ?? '');
-        log('💾 Firebase user data saved locally');
-      } catch (e) {
-        log('⚠️ Failed to save user data: $e');
+      final firebaseIdToken = await firebaseUser.getIdToken();
+      
+      if (firebaseIdToken == null) {
+        log('❌ Failed to get Firebase ID token');
+        isLoading.value = false;
+        isLoggingIn.value = false;
+        errorMessage.value = 'Failed to get Firebase ID token.';
+        return false;
       }
 
-      isLoading.value = false;
-      isLoggingIn.value = false;
-
-      // Navigate to dashboard
-      Get.offAllNamed('/dashboard');
-      return true;
+      log('📡 Sending Firebase ID token to backend...');
+      
+      // Call backend API to login/register with Firebase ID token
+      try {
+        final result = await _authService.loginWithGoogle(firebaseIdToken);
+        
+        log('✅ Backend authentication successful');
+        log('   User ID: ${result['user']?['id']}');
+        log('   User Email: ${result['user']?['email']}');
+        log('   Email Verified: ${result['user']?['email_verified']}');
+        
+        // Backend returns token and user data - already saved by auth_service
+        // Initialize and save FCM token after successful login
+        await _initializeFcmToken();
+        
+        // Check if email is verified
+        final emailVerified = result['user']?['email_verified'] ?? false;
+        
+        isLoading.value = false;
+        isLoggingIn.value = false;
+        
+        if (!emailVerified) {
+          // Navigate to OTP verification screen (same as email registration)
+          _email = result['user']?['email'];
+          _startResendTimer();
+          Get.offAllNamed('/email-otp-verify', arguments: {
+            'email': _email,
+            'isRegistration': true,
+          });
+          Get.snackbar('Success', 'Please verify your email. OTP has been sent to your email.');
+        } else {
+          // Navigate to dashboard
+          Get.offAllNamed('/dashboard');
+        }
+        return true;
+      } catch (e) {
+        log('❌ Backend authentication failed: $e');
+        isLoading.value = false;
+        isLoggingIn.value = false;
+        errorMessage.value = 'Backend authentication failed: ${e.toString()}';
+        return false;
+      }
     } on PlatformException catch (e) {
       isLoading.value = false;
       isLoggingIn.value = false;
-      
+
       // Handle specific Google Sign-In platform errors
       String errorMsg = 'Google Sign-In failed';
       
