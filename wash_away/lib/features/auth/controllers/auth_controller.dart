@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 
 /// Authentication Controller
@@ -282,132 +285,156 @@ class AuthController extends GetxController {
     _email = email.toLowerCase();
   }
 
-  /// Login with Google
+  /// Login with Google using Firebase Authentication (Android-only)
+  /// Uses Firebase Google Sign-In - no Web Client ID needed
+  /// Firebase handles authentication using google-services.json configuration
   Future<bool> loginWithGoogle() async {
     try {
       isLoading.value = true;
       isLoggingIn.value = true;
       errorMessage.value = '';
 
-      // Use GoogleSignIn.instance (singleton pattern in 7.x)
-      // serverClientId is automatically read from strings.xml (default_web_client_id)
-      // It's also configured in MainActivity.kt for native Android
-      final GoogleSignIn googleSignIn = GoogleSignIn.instance;
-      
-      // Initialize the Google Sign-In instance
-      await googleSignIn.initialize();
+      log('🔐 Starting Firebase Google Sign-In (Android-only)...');
 
-      log('🔐 Starting Google Sign-In authentication...');
-      log('📦 Package name: com.example.wash_away');
-      log('🔑 Server Client ID: 10266283459-7g052icp6h684cru34f2ab3h6qdamnp9.apps.googleusercontent.com');
+      final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
 
-      // Sign out any existing session first to ensure a fresh sign-in
+      // Sign out any existing Firebase session
+      try {
+        await firebaseAuth.signOut();
+        log('🧹 Signed out from any existing Firebase session');
+      } catch (e) {
+        log('ℹ️ No existing Firebase session: $e');
+      }
+
+      // Use Google Sign-In (6.2.2)
+      // Explicitly provide serverClientId to ensure ID token can be retrieved
+      // This fixes error 12500 when Android OAuth client is not yet configured
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+        serverClientId: '91468661410-57tg402nos5tf94jvc56ckina69tabkb.apps.googleusercontent.com', // Web Client ID from google-services.json
+      );
+
+      // Sign out any existing Google session
       try {
         await googleSignIn.signOut();
         log('🧹 Signed out from any existing Google session');
       } catch (e) {
-        log('ℹ️ No existing session to sign out: $e');
+        log('ℹ️ No existing Google session: $e');
       }
 
-      // Trigger the authentication flow
-      // authenticate() is the correct method for google_sign_in 7.x
-      log('🚀 Calling authenticate()...');
-      final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
+      // Sign in with Google using signIn() method (for google_sign_in 6.2.2)
+      // Uses Web Client ID explicitly to get ID token for Firebase
+      log('🚀 Initiating Google Sign-In (Android with Web Client ID)...');
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
       if (googleUser == null) {
-        // User canceled the sign-in or it failed silently
-        log('⚠️ Google Sign-In returned null - this usually means:');
-        log('   1. User canceled the dialog');
-        log('   2. SHA-1 fingerprint not registered in Google Cloud Console');
-        log('   3. Package name mismatch in OAuth Client ID');
-        log('   4. OAuth Client ID configuration issue');
+        log('⚠️ Google Sign-In was canceled by user');
         isLoading.value = false;
         isLoggingIn.value = false;
-        errorMessage.value = 'Google Sign-In failed. Please check:\n1. SHA-1 fingerprint is registered\n2. Package name matches\n3. OAuth Client ID is correct';
         return false;
       }
 
       log('✅ Google Sign-In successful for: ${googleUser.email}');
 
-      // Obtain the auth details from the request
-      log('🔐 Requesting authentication details...');
+      // Get authentication details
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-
-      log('🔑 Authentication details received');
-      log('   - idToken: ${googleAuth.idToken != null ? "✅ Present (${googleAuth.idToken!.length} chars)" : "❌ NULL"}');
 
       if (googleAuth.idToken == null) {
         log('❌ Failed to get Google ID token');
-        log('   This usually means serverClientId is incorrect or not configured properly');
         isLoading.value = false;
         isLoggingIn.value = false;
-        errorMessage.value = 'Failed to get Google ID token. Please check serverClientId configuration.';
+        errorMessage.value = 'Failed to get Google ID token. Please ensure Android OAuth Client is configured in Firebase Console.';
         return false;
       }
 
-      // Store idToken safely (no force unwrap needed since we checked above)
-      final String idToken = googleAuth.idToken!;
-      log('🔑 Got Google ID token (${idToken.length} chars), sending to backend...');
-      log('🌐 Backend endpoint: /auth/google/customer');
+      // Create Firebase credential
+      log('🔥 Creating Firebase credential...');
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
 
-      // Send ID token to backend with detailed error handling
-      try {
-        log('📡 Calling backend API...');
-        await _authService.loginWithGoogle(idToken);
-        log('✅ Backend login successful');
-      } catch (e, stackTrace) {
-        log('❌ Backend login failed: $e');
-        log('📚 Stack trace: $stackTrace');
+      // Sign in to Firebase
+      log('🔥 Signing in to Firebase...');
+      final UserCredential userCredential = await firebaseAuth.signInWithCredential(credential);
+
+      if (userCredential.user == null) {
+        log('❌ Firebase sign-in failed');
         isLoading.value = false;
         isLoggingIn.value = false;
-        errorMessage.value = 'Backend login failed: ${e.toString().replaceAll('Exception: ', '').replaceAll('Google login failed: ', '')}';
+        errorMessage.value = 'Firebase authentication failed.';
         return false;
+      }
+
+      log('✅ Firebase authentication successful');
+      log('   User UID: ${userCredential.user!.uid}');
+      log('   User Email: ${userCredential.user!.email}');
+
+      // Save user data locally
+      final firebaseUser = userCredential.user!;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isLoggedIn', true);
+        await prefs.setString('user_id', firebaseUser.uid);
+        await prefs.setString('user_email', firebaseUser.email ?? '');
+        await prefs.setString('user_name', firebaseUser.displayName ?? '');
+        await prefs.setString('user_phone', firebaseUser.phoneNumber ?? '');
+        await prefs.setString('auth_provider', 'google');
+        await prefs.setString('profile_image', firebaseUser.photoURL ?? '');
+        log('💾 Firebase user data saved locally');
+      } catch (e) {
+        log('⚠️ Failed to save user data: $e');
       }
 
       isLoading.value = false;
       isLoggingIn.value = false;
 
-      // Success - navigate to dashboard with error handling
-      try {
-        log('🚀 Navigating to dashboard...');
-        Get.offAllNamed('/dashboard');
-        log('✅ Navigation successful');
-      } catch (e) {
-        log('❌ Navigation failed: $e');
-        // Don't return false here - login was successful, just navigation failed
-        // User can manually navigate
-      }
+      // Navigate to dashboard
+      Get.offAllNamed('/dashboard');
       return true;
-    } on GoogleSignInException catch (e) {
+    } on PlatformException catch (e) {
       isLoading.value = false;
       isLoggingIn.value = false;
       
-      // Handle specific Google Sign-In errors
+      // Handle specific Google Sign-In platform errors
       String errorMsg = 'Google Sign-In failed';
-      if (e.code == GoogleSignInExceptionCode.canceled) {
-        // "Canceled" after selecting account usually means configuration issue
-        errorMsg = 'Google Sign-In configuration issue.\n\n'
-            'Since you\'re using Web Client ID, please verify:\n'
-            '1. Web Client ID is correct: 773204771050-m2386frnvq934chd608mcvs5qf1nkuli.apps.googleusercontent.com\n'
-            '2. Package name matches in Google Cloud Console: com.example.wash_away\n'
-            '3. DEFAULT_WEB_CLIENT_ID meta-data is in AndroidManifest.xml\n'
-            '4. If still failing, you may need to create an Android OAuth Client ID with SHA-1\n'
-            '   SHA-1: 4F:AE:6D:5D:40:79:96:7C:55:61:97:24:5F:71:DC:9B:84:5F:0D:A4';
-        log('❌ Google Sign-In Exception: ${e.code}');
-        log('   Message: ${e.toString()}');
-        log('   Using Web Client ID: 773204771050-m2386frnvq934chd608mcvs5qf1nkuli.apps.googleusercontent.com');
-      } else if (e.code == GoogleSignInExceptionCode.clientConfigurationError) {
-        errorMsg = 'Google Sign-In configuration error.\n\n'
-            'Please check:\n'
-            '1. serverClientId is set correctly\n'
-            '2. Package name matches: com.example.wash_away\n'
-            '3. OAuth Client ID exists in Google Cloud Console';
-        log('❌ Google Sign-In Exception: ${e.code}');
-        log('   Message: ${e.toString()}');
+      
+      if (e.code == 'sign_in_failed') {
+        // Parse error code from message (e.g., "ApiException: 12500" or "ApiException: 10")
+        String? errorCodeStr;
+        if (e.message != null && e.message!.contains('ApiException:')) {
+          try {
+            final match = RegExp(r'ApiException:\s*(\d+)').firstMatch(e.message!);
+            errorCodeStr = match?.group(1);
+          } catch (_) {}
+        }
+        
+        if (errorCodeStr == '12500' || errorCodeStr == '10') {
+          // Error codes 10 and 12500 = DEVELOPER_ERROR
+          // Usually means SHA-1 fingerprint not added or google-services.json not updated
+          errorMsg = 'Google Sign-In configuration error (Error $errorCodeStr).\n\n'
+              'The OAuth client is automatically created by Firebase, but you need to:\n'
+              '1. Add SHA-1 fingerprint in Firebase Console (Project Settings → Your Android App)\n'
+              '2. Wait 2-3 minutes for Firebase to process\n'
+              '3. Download updated google-services.json from Firebase Console\n'
+              '4. Replace: wash_away/android/app/google-services.json\n'
+              '5. Rebuild: flutter clean && flutter pub get && flutter run\n\n'
+              'Note: OAuth client is auto-created by Firebase - no manual OAuth setup needed!';
+        } else {
+          errorMsg = 'Google Sign-In configuration error.\n\n'
+              'Please verify in Firebase Console:\n'
+              '1. Package name: com.example.wash_away\n'
+              '2. SHA-1 fingerprint is added\n'
+              '3. Android OAuth Client is configured\n\n'
+              'Error Code: ${errorCodeStr ?? "unknown"}';
+        }
+        log('❌ Google Sign-In Platform Error: ${e.code}');
+        log('   Error Code: ${errorCodeStr ?? "unknown"}');
+        log('   Message: ${e.message}');
+        log('   Details: ${e.details}');
       } else {
-        errorMsg = 'Google Sign-In error: ${e.toString()}';
-        log('❌ Google Sign-In Exception: ${e.code}');
-        log('   Message: ${e.toString()}');
+        errorMsg = 'Google Sign-In error: ${e.message ?? e.toString()}';
+        log('❌ Google Sign-In Platform Error: ${e.code}');
+        log('   Message: ${e.message}');
       }
       
       errorMessage.value = errorMsg;
@@ -415,7 +442,7 @@ class AuthController extends GetxController {
     } catch (e) {
       isLoading.value = false;
       isLoggingIn.value = false;
-      errorMessage.value = e.toString().replaceAll('Exception: ', '').replaceAll('Google login failed: ', '');
+      errorMessage.value = 'Google Sign-In failed: ${e.toString()}';
       log('❌ Google Login Error: $e');
       return false;
     }

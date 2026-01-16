@@ -6,9 +6,7 @@
     <application
         android:label="wash_away"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true"
-        android:networkSecurityConfig="@xml/network_security_config">
+        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -40,10 +38,6 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDQTjH85etAVOY56-3AZ3oydpI3414ZsMU" />
-        <!-- Google Sign-In Web Client ID (for server-side token verification) -->
-        <meta-data
-            android:name="com.google.android.gms.auth.api.signin.DEFAULT_WEB_CLIENT_ID"
-            android:value="10266283459-7g052icp6h684cru34f2ab3h6qdamnp9.apps.googleusercontent.com" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

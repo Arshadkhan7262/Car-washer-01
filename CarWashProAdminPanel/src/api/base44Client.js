@@ -282,14 +282,22 @@ class Base44Client {
             method: 'POST',
             body: JSON.stringify(data),
           })
-          return response.json()
+          const result = await response.json()
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || result.error?.message || 'Failed to create coupon')
+          }
+          return result
         },
         update: async (id, data) => {
           const response = await fetchWithAuth(`${API_BASE_URL}/admin/coupons/${id}`, {
             method: 'PUT',
             body: JSON.stringify(data),
           })
-          return response.json()
+          const result = await response.json()
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || result.error?.message || 'Failed to update coupon')
+          }
+          return result
         },
         delete: async (id) => {
           const response = await fetchWithAuth(`${API_BASE_URL}/admin/coupons/${id}`, {

@@ -82,5 +82,46 @@ export const verifyFirebaseToken = async (idToken) => {
   }
 };
 
+/**
+ * Verify Firebase ID Token for Google Sign-In (supports both phone and email providers)
+ * @param {string} idToken - Firebase ID token from client
+ * @returns {Promise<Object>} Decoded token with user info
+ */
+export const verifyFirebaseTokenForGoogle = async (idToken) => {
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    
+    // Extract provider information
+    const providerData = decodedToken.firebase?.identities || {};
+    const providers = Object.keys(providerData);
+    const isGoogleProvider = providers.includes('google.com');
+    
+    // For Google Sign-In, email is required
+    if (!decodedToken.email) {
+      throw new Error('Email not provided in Firebase token');
+    }
+
+    return {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+      emailVerified: decodedToken.email_verified || false,
+      name: decodedToken.name || null,
+      photoURL: decodedToken.picture || decodedToken.photoURL || null,
+      phone: decodedToken.phone_number || null,
+      phoneVerified: decodedToken.phone_number ? true : false,
+      provider: isGoogleProvider ? 'google' : decodedToken.firebase?.sign_in_provider || 'unknown'
+    };
+  } catch (error) {
+    if (error.code === 'auth/id-token-expired') {
+      throw new Error('Firebase ID token has expired');
+    } else if (error.code === 'auth/id-token-revoked') {
+      throw new Error('Firebase ID token has been revoked');
+    } else if (error.code === 'auth/argument-error') {
+      throw new Error('Invalid Firebase ID token');
+    }
+    throw new Error(`Firebase token verification failed: ${error.message}`);
+  }
+};
+
 export default firebaseApp;
 

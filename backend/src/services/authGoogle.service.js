@@ -1,16 +1,21 @@
 import User from '../models/User.model.js';
 import AppError from '../errors/AppError.js';
 import { OAuth2Client } from 'google-auth-library';
-import jwt from 'jsonwebtoken';
+import { generateAccessToken, generateRefreshToken } from '../config/jwt.config.js';
 
 /**
- * Login/Register customer with Google OAuth
+ * Login/Register user with Google OAuth (Fallback when Firebase GIS is not enabled)
  * Verifies Google ID token and creates/updates user
  * 
  * @param {string} idToken - Google ID token from Flutter app
- * @returns {Object} { token: string, user: { id, name, email, role } }
+ * @param {string} role - User role ('customer' or 'washer')
+ * @returns {Object} { token: string, refreshToken: string, user: { id, name, email, role, ... } }
  */
-export const loginWithGoogle = async (idToken) => {
+export const loginWithGoogle = async (idToken, role = 'customer') => {
+  // Validate role
+  if (!['customer', 'washer'].includes(role)) {
+    throw new AppError('Invalid role. Must be "customer" or "washer"', 400);
+  }
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
     throw new Error('GOOGLE_CLIENT_ID environment variable is required');
@@ -40,12 +45,12 @@ export const loginWithGoogle = async (idToken) => {
     const normalizedEmail = email.toLowerCase().trim();
     const userName = name || email.split('@')[0]; // Use name from Google or derive from email
 
-    // Check if user already exists with this email
-    let user = await User.findOne({ email: normalizedEmail, role: 'customer' });
+    // Check if user already exists with this email and role
+    let user = await User.findOne({ email: normalizedEmail, role: role });
 
     if (user) {
-      // User exists - ensure role is customer
-      if (user.role !== 'customer') {
+      // User exists - ensure role matches
+      if (user.role !== role) {
         throw new AppError('This email is already registered with a different account type', 400);
       }
       
@@ -84,7 +89,7 @@ export const loginWithGoogle = async (idToken) => {
         googleId: googleId,
         avatar: picture || null,
         profilePicture: picture || null,
-        role: 'customer',
+        role: role,
         provider: 'google',
         email_verified: true, // Google emails are verified
         phone_verified: false,
@@ -102,27 +107,31 @@ export const loginWithGoogle = async (idToken) => {
       throw new AppError('Your account has been deactivated. Please contact support.', 403);
     }
 
-    // Generate JWT token with 7 days expiry
-    const tokenPayload = {
-      id: user._id.toString(),
-      email: user.email,
-      phone: user.phone,
-      role: user.role
-    };
+    // Update lastLogin timestamp
+    user.lastLogin = new Date();
+    await user.save();
 
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-      expiresIn: '7d'
-    });
+    // Generate JWT tokens using the same function as Firebase auth
+    const token = generateAccessToken(user._id, user.role);
+    const refreshToken = generateRefreshToken(user._id, user.role);
 
-    // Return response in the required format
+    // Return response in the required format (matching Firebase auth format)
     return {
-      token: token,
       user: {
-        id: user._id.toString(),
+        id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
-      }
+        phone: user.phone,
+        role: user.role,
+        profileImage: user.profilePicture || user.avatar || null,
+        authProvider: user.provider,
+        email_verified: user.email_verified,
+        phone_verified: user.phone_verified,
+        createdAt: user.created_date,
+        lastLogin: user.lastLogin
+      },
+      token,
+      refreshToken
     };
   } catch (error) {
     if (error instanceof AppError) {

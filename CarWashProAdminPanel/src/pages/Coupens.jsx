@@ -23,7 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, MoreHorizontal, Pencil, Trash2, Ticket, Copy, TrendingUp } from 'lucide-react';
+import { Plus, MoreHorizontal, Pencil, Trash2, Ticket, Copy, TrendingUp, Users, User } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,7 +46,9 @@ export default function Coupons() {
     max_discount: 0,
     expiry_date: '',
     usage_limit: 100,
-    is_active: true
+    is_active: true,
+    target_type: 'all',
+    target_customer_ids: []
   });
 
   const { data: coupons = [], isLoading } = useQuery({
@@ -53,13 +56,28 @@ export default function Coupons() {
     queryFn: () => base44.entities.Coupon.list('-created_date'),
   });
 
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: () => base44.entities.Customer.list('-created_date', 500),
+  });
+
   const createMutation = useMutation({
-    mutationFn: (data) => editing 
-      ? base44.entities.Coupon.update(editing.id, data)
-      : base44.entities.Coupon.create(data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      if (editing) {
+        return await base44.entities.Coupon.update(editing.id, data);
+      } else {
+        return await base44.entities.Coupon.create(data);
+      }
+    },
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['coupons'] });
+      toast.success(editing ? 'Coupon updated successfully' : 'Coupon created successfully');
       closeModal();
+    },
+    onError: (error) => {
+      console.error('Coupon creation error:', error);
+      const errorMessage = error?.message || error?.response?.data?.message || 'Failed to create coupon';
+      toast.error(errorMessage);
     }
   });
 
@@ -83,9 +101,11 @@ export default function Coupons() {
         discount_value: coupon.discount_value || 10,
         min_order_value: coupon.min_order_value || 0,
         max_discount: coupon.max_discount || 0,
-        expiry_date: coupon.expiry_date || '',
+        expiry_date: coupon.expiry_date || coupon.valid_until || '',
         usage_limit: coupon.usage_limit || 100,
-        is_active: coupon.is_active !== false
+        is_active: coupon.is_active !== false,
+        target_type: coupon.target_type || 'all',
+        target_customer_ids: coupon.target_customer_ids || []
       });
     } else {
       setEditing(null);
@@ -98,7 +118,9 @@ export default function Coupons() {
         max_discount: 0,
         expiry_date: '',
         usage_limit: 100,
-        is_active: true
+        is_active: true,
+        target_type: 'all',
+        target_customer_ids: []
       });
     }
     setShowModal(true);
@@ -117,6 +139,21 @@ export default function Coupons() {
   const copyCode = (code) => {
     navigator.clipboard.writeText(code);
     toast.success('Code copied to clipboard');
+  };
+
+  const toggleCustomerSelection = (customerId) => {
+    const currentIds = form.target_customer_ids || [];
+    if (currentIds.includes(customerId)) {
+      setForm({
+        ...form,
+        target_customer_ids: currentIds.filter(id => id !== customerId)
+      });
+    } else {
+      setForm({
+        ...form,
+        target_customer_ids: [...currentIds, customerId]
+      });
+    }
   };
 
   const isExpired = (date) => {
@@ -455,6 +492,90 @@ export default function Coupons() {
                 </div>
               </div>
 
+              {/* Target Customers Section */}
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+                  Target Customers
+                </h3>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Send To *</Label>
+                    <Select
+                      value={form.target_type}
+                      onValueChange={(v) => setForm({ 
+                        ...form, 
+                        target_type: v,
+                        target_customer_ids: v === 'all' ? [] : form.target_customer_ids
+                      })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4" />
+                            <span>All Customers</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="specific">
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4" />
+                            <span>Specific Customers</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-500">
+                      {form.target_type === 'all' 
+                        ? 'Coupon will be sent to all customers via email'
+                        : 'Select specific customers to send the coupon to'}
+                    </p>
+                  </div>
+
+                  {form.target_type === 'specific' && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">
+                        Select Customers ({form.target_customer_ids?.length || 0} selected)
+                      </Label>
+                      <div className="border rounded-lg p-4 max-h-60 overflow-y-auto bg-slate-50">
+                        {customers.length === 0 ? (
+                          <p className="text-sm text-slate-500 text-center py-4">No customers found</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {customers.map((customer) => (
+                              <div
+                                key={customer.id}
+                                className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer"
+                                onClick={() => toggleCustomerSelection(customer.id)}
+                              >
+                                <Checkbox
+                                  checked={form.target_customer_ids?.includes(customer.id) || false}
+                                  onCheckedChange={() => toggleCustomerSelection(customer.id)}
+                                />
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-slate-900">
+                                    {customer.name || 'Unknown'}
+                                  </p>
+                                  <p className="text-xs text-slate-500">
+                                    {customer.email || customer.phone || 'No contact'}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {form.target_type === 'specific' && (!form.target_customer_ids || form.target_customer_ids.length === 0) && (
+                        <p className="text-xs text-red-500">
+                          Please select at least one customer
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Status Section */}
               <div className="space-y-4 pt-4 border-t">
                 <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
@@ -484,7 +605,28 @@ export default function Coupons() {
               Cancel
             </Button>
             <Button 
-              onClick={() => createMutation.mutate(form)}
+              onClick={() => {
+                // Validate form
+                if (!form.code || form.code.trim() === '') {
+                  toast.error('Please enter a coupon code');
+                  return;
+                }
+                if (form.target_type === 'specific' && (!form.target_customer_ids || form.target_customer_ids.length === 0)) {
+                  toast.error('Please select at least one customer');
+                  return;
+                }
+                
+                // Prepare data for submission
+                const submitData = {
+                  ...form,
+                  // Convert empty expiry_date to null
+                  expiry_date: form.expiry_date || null,
+                  // Ensure target_customer_ids is an array
+                  target_customer_ids: form.target_type === 'all' ? [] : (form.target_customer_ids || [])
+                };
+                
+                createMutation.mutate(submitData);
+              }}
               disabled={createMutation.isPending}
             >
               {createMutation.isPending 

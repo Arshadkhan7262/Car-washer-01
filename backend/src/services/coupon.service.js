@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Coupon from '../models/Coupon.model.js';
 import AppError from '../errors/AppError.js';
 
@@ -152,7 +153,15 @@ export const deleteCoupon = async (couponId) => {
 /**
  * Validate and apply coupon
  */
-export const validateCoupon = async (code, orderValue) => {
+export const validateCoupon = async (code, orderValue, customerId = null) => {
+  // Normalize customerId to ObjectId if provided
+  let normalizedCustomerId = null;
+  if (customerId) {
+    normalizedCustomerId = customerId instanceof mongoose.Types.ObjectId 
+      ? customerId 
+      : new mongoose.Types.ObjectId(customerId);
+  }
+
   const coupon = await Coupon.findOne({ 
     code: code.toUpperCase().trim() 
   });
@@ -161,8 +170,9 @@ export const validateCoupon = async (code, orderValue) => {
     throw new AppError('Invalid coupon code', 404);
   }
 
-  // Check if coupon is valid
-  const validation = coupon.isValid(orderValue);
+  // Check if coupon is valid (includes customer-specific checks)
+  // Pass normalized customerId to isValid
+  const validation = coupon.isValid(orderValue, normalizedCustomerId || customerId);
   if (!validation.valid) {
     throw new AppError(validation.message, 400);
   }
@@ -186,11 +196,124 @@ export const validateCoupon = async (code, orderValue) => {
 };
 
 /**
- * Increment coupon usage
+ * Mark coupon as used by customer
+ */
+export const markCouponAsUsed = async (couponId, customerId) => {
+  const coupon = await Coupon.findById(couponId);
+  
+  if (!coupon) {
+    throw new AppError('Coupon not found', 404);
+  }
+
+  if (!customerId) {
+    // If no customerId, just increment usage
+    coupon.times_used += 1;
+    await coupon.save();
+    return coupon;
+  }
+
+  // Convert customerId to ObjectId for consistent comparison
+  const customerObjectId = customerId instanceof mongoose.Types.ObjectId 
+    ? customerId 
+    : new mongoose.Types.ObjectId(customerId);
+
+  // Convert to string for comparison
+  const customerIdStr = customerObjectId.toString();
+
+  // Check if customer already used this coupon
+  const alreadyUsed = coupon.used_by_customers.some(
+    id => {
+      const idStr = id instanceof mongoose.Types.ObjectId 
+        ? id.toString() 
+        : (id?._id ? id._id.toString() : String(id));
+      return idStr === customerIdStr;
+    }
+  );
+
+  // Add customer to used_by_customers if not already there
+  if (!alreadyUsed) {
+    // Use atomic update to ensure consistency
+    const updateResult = await Coupon.findByIdAndUpdate(
+      couponId,
+      {
+        $addToSet: { used_by_customers: customerObjectId }, // $addToSet prevents duplicates
+        $inc: { times_used: 1 }
+      },
+      { new: true } // Return updated document
+    );
+    
+    if (updateResult) {
+      console.log(`✅ Coupon ${coupon.code} marked as used by customer ${customerIdStr}`);
+      return updateResult;
+    } else {
+      console.error(`❌ Failed to mark coupon ${coupon.code} as used by customer ${customerIdStr}`);
+      throw new AppError('Failed to mark coupon as used', 500);
+    }
+  } else {
+    console.log(`⚠️ Customer ${customerIdStr} already used coupon ${coupon.code}`);
+  }
+
+  return coupon;
+};
+
+/**
+ * Increment coupon usage (deprecated - use markCouponAsUsed instead)
  */
 export const incrementCouponUsage = async (couponId) => {
   await Coupon.findByIdAndUpdate(
     couponId,
     { $inc: { times_used: 1 } }
   );
+};
+
+/**
+ * Get available coupons for a customer
+ */
+export const getAvailableCouponsForCustomer = async (customerId) => {
+  const now = new Date();
+  const customerIdStr = customerId?.toString();
+  
+  // Build query
+  const query = {
+    is_active: true,
+    valid_from: { $lte: now },
+    valid_until: { $gte: now },
+    $or: [
+      { usage_limit: null },
+      { $expr: { $lt: ['$times_used', '$usage_limit'] } }
+    ]
+  };
+
+  // Add target type filter
+  if (customerId) {
+    query.$and = [
+      {
+        $or: [
+          { target_type: 'all' },
+          { target_type: 'specific', target_customer_ids: customerId }
+        ]
+      }
+    ];
+  } else {
+    query.target_type = 'all';
+  }
+  
+  const coupons = await Coupon.find(query)
+    .select('code description discount_type discount_value min_order_value max_discount valid_until usage_limit times_used used_by_customers')
+    .lean();
+
+  // Filter out coupons already used by this customer
+  const availableCoupons = coupons.filter(coupon => {
+    if (!customerIdStr) return true;
+    if (!coupon.used_by_customers || coupon.used_by_customers.length === 0) return true;
+    return !coupon.used_by_customers.some(
+      id => id.toString() === customerIdStr
+    );
+  });
+
+  // Remove used_by_customers from response for privacy
+  return availableCoupons.map(coupon => {
+    const { used_by_customers, ...rest } = coupon;
+    return rest;
+  });
 };

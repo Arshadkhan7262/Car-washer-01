@@ -50,6 +50,22 @@ const couponSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  // Target customers: 'all' or 'specific'
+  target_type: {
+    type: String,
+    enum: ['all', 'specific'],
+    default: 'all'
+  },
+  // Specific customer IDs if target_type is 'specific'
+  target_customer_ids: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  // Track which customers have used this coupon
+  used_by_customers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   is_active: {
     type: Boolean,
     default: true
@@ -65,7 +81,7 @@ const couponSchema = new mongoose.Schema({
 });
 
 // Method to validate coupon
-couponSchema.methods.isValid = function(orderValue) {
+couponSchema.methods.isValid = function(orderValue, customerId = null) {
   const now = new Date();
   
   // Check if coupon is active
@@ -93,6 +109,47 @@ couponSchema.methods.isValid = function(orderValue) {
   // Check usage limit
   if (this.usage_limit && this.times_used >= this.usage_limit) {
     return { valid: false, message: 'Coupon usage limit reached' };
+  }
+  
+  // Check if customer is allowed to use this coupon
+  if (this.target_type === 'specific') {
+    if (!this.target_customer_ids || this.target_customer_ids.length === 0) {
+      return { valid: false, message: 'This coupon is not available for you' };
+    }
+    
+    // Check if customer is in target list
+    if (customerId) {
+      const customerIdStr = customerId.toString();
+      const isTargeted = this.target_customer_ids.some(
+        id => id.toString() === customerIdStr
+      );
+      
+      if (!isTargeted) {
+        return { valid: false, message: 'This coupon is not available for you' };
+      }
+    }
+  }
+  
+  // Check if customer has already used this coupon
+  if (customerId) {
+    // Convert customerId to string for comparison
+    const customerIdStr = customerId instanceof Types.ObjectId 
+      ? customerId.toString() 
+      : String(customerId);
+    
+    // Check if customer has already used this coupon
+    const alreadyUsed = this.used_by_customers.some(id => {
+      if (!id) return false;
+      // Handle both ObjectId and string formats
+      const idStr = id instanceof Types.ObjectId 
+        ? id.toString() 
+        : (id._id ? id._id.toString() : String(id));
+      return idStr === customerIdStr;
+    });
+    
+    if (alreadyUsed) {
+      return { valid: false, message: 'You have already used this coupon' };
+    }
   }
   
   return { valid: true };

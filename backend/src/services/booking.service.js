@@ -176,15 +176,16 @@ export const createBooking = async (bookingData) => {
     try {
       const couponResult = await couponService.validateCoupon(
         bookingData.coupon_code,
-        subtotal
+        subtotal,
+        bookingData.customer_id
       );
       
       couponCode = couponResult.coupon.code;
       discount = couponResult.discount;
       total = couponResult.total;
 
-      // Increment coupon usage
-      await couponService.incrementCouponUsage(couponResult.coupon.id);
+      // Mark coupon as used by this customer
+      await couponService.markCouponAsUsed(couponResult.coupon.id, bookingData.customer_id);
     } catch (error) {
       // If coupon validation fails, throw error
       throw new AppError(error.message || 'Invalid coupon code', error.statusCode || 400);

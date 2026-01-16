@@ -1019,6 +1019,254 @@ class EmailService {
   }
 
   /**
+   * Generate HTML email template for coupon code
+   */
+  generateCouponEmailTemplate(couponCode, discountValue, discountType, expiryDate, userName = 'User') {
+    const discountText = discountType === 'percentage' 
+      ? `${discountValue}% OFF` 
+      : `$${discountValue} OFF`;
+    const expiryText = expiryDate 
+      ? `Valid until ${new Date(expiryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
+      : 'No expiration';
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Special Offer - Wash Away</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #1A1A1A;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        .email-wrapper {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #8DA2FF 0%, #6B7FD7 100%);
+            padding: 40px 30px;
+            text-align: center;
+            color: #ffffff;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            letter-spacing: -0.5px;
+        }
+        .header-subtitle {
+            font-size: 16px;
+            opacity: 0.95;
+            font-weight: 400;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #1A1A1A;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .message {
+            font-size: 15px;
+            color: #666666;
+            margin-bottom: 30px;
+            line-height: 1.8;
+        }
+        .coupon-container {
+            background: linear-gradient(135deg, #F8F9FB 0%, #E8EBF0 100%);
+            border: 3px dashed #8DA2FF;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            margin: 30px 0;
+            box-shadow: 0 4px 12px rgba(141, 162, 255, 0.15);
+        }
+        .discount-badge {
+            font-size: 36px;
+            font-weight: 700;
+            color: #8DA2FF;
+            margin-bottom: 15px;
+        }
+        .coupon-code {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1A1A1A;
+            letter-spacing: 8px;
+            font-family: 'Courier New', 'Monaco', monospace;
+            text-align: center;
+            padding: 15px;
+            background: #ffffff;
+            border-radius: 8px;
+            display: inline-block;
+            margin: 15px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .expiry-info {
+            font-size: 14px;
+            color: #666666;
+            margin-top: 15px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #8DA2FF 0%, #6B7FD7 100%);
+            color: #ffffff;
+            padding: 14px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            margin: 20px 0;
+            box-shadow: 0 4px 12px rgba(141, 162, 255, 0.3);
+        }
+        .footer {
+            background-color: #F8F9FB;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #E8EBF0;
+        }
+        .footer-text {
+            font-size: 13px;
+            color: #999999;
+            margin-bottom: 8px;
+        }
+        @media only screen and (max-width: 600px) {
+            .content {
+                padding: 30px 20px;
+            }
+            .header {
+                padding: 30px 20px;
+            }
+            .coupon-code {
+                font-size: 24px;
+                letter-spacing: 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-wrapper">
+        <div class="header">
+            <div class="logo">🚿 Wash Away</div>
+            <div class="header-subtitle">Special Discount Offer</div>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">Hello ${userName}!</div>
+            
+            <p class="message">
+                We have a special discount coupon just for you! Use this code on your next booking to save on our premium car wash services.
+            </p>
+            
+            <div class="coupon-container">
+                <div class="discount-badge">${discountText}</div>
+                <div class="coupon-code">${couponCode}</div>
+                <div class="expiry-info">${expiryText}</div>
+            </div>
+            
+            <p class="message" style="font-size: 14px; color: #999999; text-align: center;">
+                Enter this code at checkout to apply your discount. This offer is valid for one-time use only.
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p class="footer-text">
+                © ${new Date().getFullYear()} Wash Away. All rights reserved.
+            </p>
+            <p class="footer-text">
+                This is an automated email. Please do not reply to this message.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+    `;
+  }
+
+  /**
+   * Send coupon email
+   * @param {string} to - Recipient email address
+   * @param {string} couponCode - Coupon code
+   * @param {number} discountValue - Discount value
+   * @param {string} discountType - Discount type ('percentage' or 'fixed')
+   * @param {Date} expiryDate - Expiry date
+   * @param {string} userName - User's name (optional)
+   * @returns {Promise<Object>} Send result
+   */
+  async sendCouponEmail(to, couponCode, discountValue, discountType, expiryDate, userName = 'User') {
+    try {
+      if (!this.transporter) {
+        console.warn(`⚠️ Email service not initialized. Skipping coupon email to ${to}. Code: ${couponCode}`);
+        return {
+          success: false,
+          message: 'Email service not initialized',
+        };
+      }
+
+      if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) {
+        console.warn(`⚠️ SMTP credentials not configured. Skipping coupon email to ${to}. Code: ${couponCode}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`📧 Development mode - Coupon Code for ${to}: ${couponCode}`);
+        }
+        return {
+          success: false,
+          message: 'SMTP not configured',
+        };
+      }
+
+      const subject = `🎉 Special Discount Offer - Wash Away`;
+      const textMessage = `Hello ${userName},\n\nWe have a special discount coupon just for you!\n\nCoupon Code: ${couponCode}\nDiscount: ${discountType === 'percentage' ? discountValue + '%' : '$' + discountValue}\n${expiryDate ? `Valid until: ${new Date(expiryDate).toLocaleDateString()}` : 'No expiration'}\n\nEnter this code at checkout to apply your discount. This offer is valid for one-time use only.\n\n© ${new Date().getFullYear()} Wash Away. All rights reserved.`;
+
+      const mailOptions = {
+        from: `"Wash Away" <${process.env.SMTP_USER}>`,
+        to: to,
+        subject: subject,
+        html: this.generateCouponEmailTemplate(couponCode, discountValue, discountType, expiryDate, userName),
+        text: textMessage,
+      };
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Email sending timeout after 10 seconds')), 10000);
+      });
+
+      const sendPromise = this.transporter.sendMail(mailOptions);
+      const info = await Promise.race([sendPromise, timeoutPromise]);
+      
+      console.log(`✅ Coupon email sent to ${to}:`, info.messageId);
+      
+      return {
+        success: true,
+        messageId: info.messageId,
+      };
+    } catch (error) {
+      console.error(`❌ Failed to send coupon email to ${to}:`, error.message);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`📧 Development mode - Coupon Code for ${to}: ${couponCode}`);
+      }
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
    * Send password reset email
    * @param {string} to - Recipient email address
    * @param {string} resetCode - Reset code

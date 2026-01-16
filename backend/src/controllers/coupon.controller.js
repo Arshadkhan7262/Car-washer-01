@@ -1,4 +1,6 @@
 import * as couponService from '../services/coupon.service.js';
+import emailService from '../services/email.service.js';
+import User from '../models/User.model.js';
 import AppError from '../errors/AppError.js';
 
 /**
@@ -62,7 +64,9 @@ export const createCoupon = async (req, res, next) => {
       max_discount,
       expiry_date,
       usage_limit,
-      is_active
+      is_active,
+      target_type,
+      target_customer_ids
     } = req.body;
 
     // Validate required fields
@@ -73,6 +77,43 @@ export const createCoupon = async (req, res, next) => {
       });
     }
 
+    // Validate target_type
+    if (target_type && !['all', 'specific'].includes(target_type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'target_type must be either "all" or "specific"'
+      });
+    }
+
+    // If target_type is specific, validate customer IDs
+    if (target_type === 'specific') {
+      if (!target_customer_ids || !Array.isArray(target_customer_ids) || target_customer_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'target_customer_ids is required when target_type is "specific"'
+        });
+      }
+
+      // Validate that all customer IDs exist
+      const customers = await User.find({
+        _id: { $in: target_customer_ids },
+        role: 'customer'
+      });
+      
+      if (customers.length !== target_customer_ids.length) {
+        return res.status(400).json({
+          success: false,
+          message: 'One or more customer IDs are invalid'
+        });
+      }
+    }
+
+    // Set valid_until from expiry_date
+    // If expiry_date is empty string or null, set default to 1 year from now
+    const valid_until = (expiry_date && expiry_date.trim && expiry_date.trim() !== '') 
+      ? new Date(expiry_date) 
+      : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // Default 1 year
+
     const coupon = await couponService.createCoupon({
       code,
       description,
@@ -80,10 +121,58 @@ export const createCoupon = async (req, res, next) => {
       discount_value: parseFloat(discount_value),
       min_order_value: min_order_value ? parseFloat(min_order_value) : 0,
       max_discount: max_discount ? parseFloat(max_discount) : 0,
-      expiry_date: expiry_date ? new Date(expiry_date) : null,
+      valid_until,
       usage_limit: usage_limit ? parseInt(usage_limit) : null,
-      is_active: is_active !== undefined ? is_active : true
+      is_active: is_active !== undefined ? is_active : true,
+      target_type: target_type || 'all',
+      target_customer_ids: target_type === 'specific' ? target_customer_ids : []
     });
+
+    // Send emails to customers
+    try {
+      if (target_type === 'all') {
+        // Send to all customers
+        const allCustomers = await User.find({ role: 'customer', email: { $ne: null } });
+        
+        const emailPromises = allCustomers.map(customer => 
+          emailService.sendCouponEmail(
+            customer.email,
+            coupon.code,
+            coupon.discount_value,
+            coupon.discount_type,
+            coupon.valid_until,
+            customer.name
+          )
+        );
+
+        await Promise.allSettled(emailPromises);
+        console.log(`📧 Coupon emails sent to ${allCustomers.length} customers`);
+      } else if (target_type === 'specific' && target_customer_ids) {
+        // Send to specific customers
+        const specificCustomers = await User.find({
+          _id: { $in: target_customer_ids },
+          role: 'customer',
+          email: { $ne: null }
+        });
+
+        const emailPromises = specificCustomers.map(customer =>
+          emailService.sendCouponEmail(
+            customer.email,
+            coupon.code,
+            coupon.discount_value,
+            coupon.discount_type,
+            coupon.valid_until,
+            customer.name
+          )
+        );
+
+        await Promise.allSettled(emailPromises);
+        console.log(`📧 Coupon emails sent to ${specificCustomers.length} customers`);
+      }
+    } catch (emailError) {
+      console.error('Error sending coupon emails:', emailError);
+      // Don't fail the request if email sending fails
+    }
 
     res.status(201).json({
       success: true,
@@ -161,6 +250,7 @@ export const deleteCoupon = async (req, res, next) => {
 export const validateCoupon = async (req, res, next) => {
   try {
     const { code, order_value } = req.body;
+    const customerId = req.customer?.id || req.customer?._id?.toString();
 
     if (!code) {
       return res.status(400).json({
@@ -176,11 +266,38 @@ export const validateCoupon = async (req, res, next) => {
       });
     }
 
-    const result = await couponService.validateCoupon(code, parseFloat(order_value));
+    const result = await couponService.validateCoupon(code, parseFloat(order_value), customerId);
 
     res.status(200).json({
       success: true,
       data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get available coupons for customer
+ * @route   GET /api/v1/customer/coupons
+ * @access  Private (Customer)
+ */
+export const getAvailableCoupons = async (req, res, next) => {
+  try {
+    const customerId = req.customer?.id || req.customer?._id?.toString();
+
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Customer authentication required'
+      });
+    }
+
+    const coupons = await couponService.getAvailableCouponsForCustomer(customerId);
+
+    res.status(200).json({
+      success: true,
+      data: coupons
     });
   } catch (error) {
     next(error);

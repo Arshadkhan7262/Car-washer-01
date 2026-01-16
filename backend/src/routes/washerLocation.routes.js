@@ -19,3 +19,5 @@ router.get('/', washerLocationController.getLocation);
 export default router;
 
 
+
+

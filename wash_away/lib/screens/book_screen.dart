@@ -363,18 +363,17 @@ class _BookScreenState extends State<BookScreen> {
     );
   }
 
-  // --- STAGE 3: DATE & TIME SELECTION (Unchanged) ---
+  // --- STAGE 3: DATE & TIME SELECTION ---
   Widget _buildDateTimeSelectionStage(BookController controller) {
-    // Initialize defaults when this stage is first shown (only if not already set)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (controller.selectedDate.value == null) {
-        final now = DateTime.now();
-        controller.selectedDate.value = DateTime(now.year, now.month, now.day);
-      }
-      if (controller.selectedTime.value.isEmpty) {
-        controller.selectedTime.value = '10:00 AM';
-      }
-    });
+    // Initialize date and time immediately when Stage 3 builds (if not already set)
+    // This ensures the "Next" button is enabled as soon as address fields are filled
+    if (controller.selectedDate.value == null) {
+      final now = DateTime.now();
+      controller.selectedDate.value = DateTime(now.year, now.month, now.day);
+    }
+    if (controller.selectedTime.value.isEmpty) {
+      controller.selectedTime.value = '10:00 AM';
+    }
 
     final List<String> availableTimes = [
       '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',

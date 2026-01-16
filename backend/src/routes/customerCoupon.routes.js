@@ -4,7 +4,8 @@ import { protectCustomer } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-// Customer route - validate coupon
+// Customer routes
+router.get('/', protectCustomer, couponController.getAvailableCoupons);
 router.post('/validate', protectCustomer, couponController.validateCoupon);
 
 export default router;

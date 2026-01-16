@@ -809,15 +809,44 @@ class BookController extends GetxController {
 
   void navigateToPreviousPage() {
     if (currentPage.value > 0) {
-      pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-      currentPage.value--;
+      final previousPage = currentPage.value - 1;
+      
+      // Update currentPage first for immediate UI responsiveness
+      currentPage.value = previousPage;
+      
+      // Navigate PageView using jumpToPage for reliable navigation
+      if (pageController.hasClients) {
+        try {
+          pageController.jumpToPage(previousPage);
+        } catch (e) {
+          print('Error navigating to previous page: $e');
+          // Fallback: try animateToPage
+          try {
+            pageController.animateToPage(
+              previousPage,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          } catch (e2) {
+            print('Error animating to previous page: $e2');
+          }
+        }
+      } else {
+        // If PageController not ready, use post-frame callback
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (pageController.hasClients) {
+            try {
+              pageController.jumpToPage(previousPage);
+            } catch (e) {
+              print('Error jumping to previous page after post-frame: $e');
+            }
+          }
+        });
+      }
+      
       // Clear selections if moving back
-      if (currentPage.value == 2) selectedPaymentMethod.value = 'Credit Card';
-      if (currentPage.value == 1) {
-        // Only reset if they're null/empty, don't change if already set
+      if (previousPage == 2) {
+        // Stage 3 - ensure date and time are set
         if (selectedDate.value == null) {
           final now = DateTime.now();
           selectedDate.value = DateTime(now.year, now.month, now.day);
@@ -825,6 +854,10 @@ class BookController extends GetxController {
         if (selectedTime.value.isEmpty) {
           selectedTime.value = '10:00 AM';
         }
+      }
+      if (previousPage == 3) {
+        // Stage 4 - reset payment method to default
+        selectedPaymentMethod.value = 'Credit Card';
       }
     }
   }

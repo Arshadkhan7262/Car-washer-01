@@ -459,12 +459,20 @@ class AuthService {
         throw Exception(errorMessage);
       }
 
-      // New endpoint returns { token, user } directly (not wrapped in data)
-      final token = response.data['token'];
-      final user = response.data['user'];
+      // Backend returns { success: true, data: { token, refreshToken, user } }
+      final responseData = response.data['data'];
+      if (responseData == null) {
+        log('❌ [loginWithGoogle] No data in response');
+        throw Exception('Invalid response format from server');
+      }
+
+      final token = responseData['token'];
+      final refreshToken = responseData['refreshToken'];
+      final user = responseData['user'];
 
       log('🔍 [loginWithGoogle] Parsing response data...');
       log('   Token: ${token != null ? "✅ Present" : "❌ NULL"}');
+      log('   RefreshToken: ${refreshToken != null ? "✅ Present" : "❌ NULL"}');
       log('   User: ${user != null ? "✅ Present" : "❌ NULL"}');
 
       if (token == null) {
@@ -479,10 +487,9 @@ class AuthService {
 
       log('💾 [loginWithGoogle] Saving auth data...');
       // Save tokens and user data
-      // Note: New endpoint doesn't return refreshToken, using token for both
       await _saveAuthData(
         token: token,
-        refreshToken: token, // Use same token as refresh (or handle separately if needed)
+        refreshToken: refreshToken ?? token, // Use refreshToken if available, otherwise use token
         userId: user['id']?.toString() ?? '',
         userEmail: user['email']?.toString() ?? '',
         userName: user['name']?.toString() ?? '',
