@@ -8,12 +8,12 @@ class AppConstants {
   // For Android Emulator: 'http://10.0.2.2:3000/api/v1'
   //   (10.0.2.2 is a special IP that maps to host's localhost)
   //
-  // For Physical Android Device: 'http://192.168.18.31:3000/api/v1'
+  // For Physical Android Device: 'http://192.168.18.7:3000/api/v1'
   //   (Use your computer's network IP address)
   //
   // For iOS Simulator: 'http://localhost:3000/api/v1'
   //
-  // For Physical iOS Device: 'http://192.168.18.31:3000/api/v1'
+  // For Physical iOS Device: 'http://192.168.18.7:3000/api/v1'
   //
   // To switch: Change the value below and restart the app
   
@@ -27,15 +27,15 @@ class AppConstants {
         return 'http://10.0.2.2:3000/api/v1';
       } else {
         // Physical Android device uses network IP
-        return 'http://192.168.18.31:3000/api/v1';
+        return 'http://192.168.18.7:3000/api/v1';
       }
     } else if (Platform.isIOS) {
       // iOS Simulator can use localhost, physical device needs network IP
       // You may need to detect if it's simulator or device
-      return 'http://192.168.18.31:3000/api/v1';
+      return 'http://192.168.18.7:3000/api/v1';
     } else {
       // Default to network IP
-      return 'http://192.168.18.31:3000/api/v1';
+      return 'http://192.168.18.7:3000/api/v1';
     }
   }
   static const int connectionTimeout = 30000; // 30 seconds

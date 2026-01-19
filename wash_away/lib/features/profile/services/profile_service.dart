@@ -1,14 +1,25 @@
 import 'dart:developer';
 import '../../../api/api_client.dart';
+import '../../auth/services/auth_service.dart';
 
 /// Profile Service
 /// Handles Customer Profile data, stats, and preferences via Backend API
 class ProfileService {
   final ApiClient _apiClient = ApiClient();
+  final AuthService _authService = AuthService();
 
   /// Get customer profile with stats and preferences
   Future<Map<String, dynamic>> getProfile() async {
     try {
+      // Set auth token before making API call
+      final token = await _authService.getAuthToken();
+      if (token != null) {
+        _apiClient.setAuthToken(token);
+      } else {
+        log('⚠️ [getProfile] No auth token found');
+        throw Exception('Authentication required. Please login again.');
+      }
+
       final response = await _apiClient.get('/customer/profile');
 
       if (!response.success) {
@@ -32,6 +43,15 @@ class ProfileService {
   /// Get customer stats only
   Future<Map<String, dynamic>> getStats() async {
     try {
+      // Set auth token before making API call
+      final token = await _authService.getAuthToken();
+      if (token != null) {
+        _apiClient.setAuthToken(token);
+      } else {
+        log('⚠️ [getStats] No auth token found');
+        throw Exception('Authentication required. Please login again.');
+      }
+
       final response = await _apiClient.get('/customer/profile/stats');
 
       if (!response.success) {
@@ -55,6 +75,15 @@ class ProfileService {
   /// Get customer preferences only
   Future<Map<String, dynamic>> getPreferences() async {
     try {
+      // Set auth token before making API call
+      final token = await _authService.getAuthToken();
+      if (token != null) {
+        _apiClient.setAuthToken(token);
+      } else {
+        log('⚠️ [getPreferences] No auth token found');
+        throw Exception('Authentication required. Please login again.');
+      }
+
       final response = await _apiClient.get('/customer/profile/preferences');
 
       if (!response.success) {
@@ -81,6 +110,15 @@ class ProfileService {
     String? email,
   }) async {
     try {
+      // Set auth token before making API call
+      final token = await _authService.getAuthToken();
+      if (token != null) {
+        _apiClient.setAuthToken(token);
+      } else {
+        log('⚠️ [updateProfile] No auth token found');
+        throw Exception('Authentication required. Please login again.');
+      }
+
       final body = <String, dynamic>{};
       if (name != null) body['name'] = name;
       if (phone != null) body['phone'] = phone;
@@ -116,6 +154,15 @@ class ProfileService {
     bool? twoFactorAuthEnabled,
   }) async {
     try {
+      // Set auth token before making API call
+      final token = await _authService.getAuthToken();
+      if (token != null) {
+        _apiClient.setAuthToken(token);
+      } else {
+        log('⚠️ [updatePreferences] No auth token found');
+        throw Exception('Authentication required. Please login again.');
+      }
+
       final body = <String, dynamic>{};
       if (pushNotificationEnabled != null) {
         body['push_notification_enabled'] = pushNotificationEnabled;
