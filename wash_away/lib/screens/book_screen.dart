@@ -8,6 +8,8 @@ import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
 import '../widgets/service_card_widget.dart';
 import '../widgets/custom_text_field.dart';
+import '../controllers/profile_controller.dart';
+import '../services/stripe_payment_service.dart';
 
 class BookScreen extends StatefulWidget {
   const BookScreen({super.key});
@@ -583,6 +585,9 @@ class _BookScreenState extends State<BookScreen> {
                                   controller.selectedSavedAddress.value = address;
                                   if (address != null) {
                                     controller.addressController.text = address.fullAddress;
+                                    controller.addressText.value = address.fullAddress; // Update reactive variable
+                                  } else {
+                                    controller.addressText.value = ''; // Clear reactive variable
                                   }
                                 },
                               ),
@@ -734,25 +739,481 @@ class _BookScreenState extends State<BookScreen> {
             ),
           ),
           const SizedBox(height: 20),
-          // Continue Button
-          Obx(() => Center(
-            child: SizedBox(
-              width: MediaQuery.of(Get.context!).size.width*0.5,
-              child: ElevatedButton(
-                onPressed: controller.isStage3Complete ? () => controller.navigateToNextPage(Get.context!) : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(Get.context!).brightness == Brightness.dark ? Colors.white : Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          // Continue Button - Observe all reactive values for validation
+          Obx(() {
+            // Access all reactive values to ensure proper tracking
+            final hasDate = controller.selectedDate.value != null;
+            final hasTime = controller.selectedTime.value.isNotEmpty;
+            final hasSavedAddress = controller.selectedSavedAddress.value != null;
+            // Use reactive variable for manual address text
+            final hasManualAddress = controller.addressText.value.trim().isNotEmpty;
+            final hasAddress = hasSavedAddress || hasManualAddress;
+            final hasVehicleType = controller.selectedVehicleType.value != null;
+            final hasSavedVehicle = controller.selectedSavedVehicle.value != null;
+            final hasVehicle = hasVehicleType || hasSavedVehicle;
+            // Use reactive variable for additional location text
+            final hasAdditionalLocation = controller.additionalLocationText.value.trim().isNotEmpty;
+            
+            final isComplete = hasDate && hasTime && hasAddress && hasVehicle && hasAdditionalLocation;
+            
+            return Center(
+              child: SizedBox(
+                width: MediaQuery.of(Get.context!).size.width*0.5,
+                child: ElevatedButton(
+                  onPressed: isComplete ? () => controller.navigateToNextPage(Get.context!) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(Get.context!).brightness == Brightness.dark ? Colors.white : Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text('Next',
+                      style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark ? Colors.black : Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
-                child: Text('Next',
-                    style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark ? Colors.black : Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               ),
-            ),
-          )),
+            );
+          }),
         ],
       ),
     );
+  }
+
+  // Build payment method details based on selection
+  Widget _buildPaymentMethodDetails(BookController controller, BuildContext context) {
+    final selectedMethod = controller.selectedPaymentMethod.value;
+    
+    if (selectedMethod.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    switch (selectedMethod) {
+      case 'Credit Card':
+        return _buildCreditCardDetails(controller, context);
+      case 'Google Pay':
+        return _buildGooglePayDetails(controller, context);
+      case 'Wallet':
+        return _buildWalletDetails(controller, context);
+      case 'Cash':
+        return _buildCashDetails(controller, context);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  // Credit Card Details - Payment Sheet will handle card entry
+  Widget _buildCreditCardDetails(BookController controller, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 10),
+      decoration: BoxDecoration(
+        color: isDark ? DarkTheme.card : LightTheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.credit_card, color: isDark ? DarkTheme.primary : LightTheme.primary, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                'Credit Card',
+                style: GoogleFonts.inter(
+                  color: isDark ? DarkTheme.textPrimary : LightTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'You will be prompted to enter your card details securely when you click the Pay button. A secure payment form will appear.',
+            style: GoogleFonts.inter(
+              color: isDark ? DarkTheme.textSecondary : LightTheme.textSecondary,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.blue.withValues(alpha: 0.1)
+                  : Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.lock,
+                  color: isDark ? DarkTheme.primary : LightTheme.primary,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Your card details are secure and encrypted by Stripe',
+                    style: GoogleFonts.inter(
+                      color: isDark ? DarkTheme.textSecondary : LightTheme.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Google Pay Details
+  Widget _buildGooglePayDetails(BookController controller, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 10),
+      decoration: BoxDecoration(
+        color: isDark ? DarkTheme.card : LightTheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.account_balance_wallet, color: Colors.green, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                'Google Pay',
+                style: GoogleFonts.inter(
+                  color: isDark ? DarkTheme.textPrimary : LightTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'You will be redirected to Google Pay for authentication when you proceed with payment.',
+            style: GoogleFonts.inter(
+              color: isDark ? DarkTheme.textSecondary : LightTheme.textSecondary,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Wallet Details
+  Widget _buildWalletDetails(BookController controller, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final profileController = Get.find<ProfileController>();
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 10),
+      decoration: BoxDecoration(
+        color: isDark ? DarkTheme.card : LightTheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.wallet, color: Colors.orange, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                'Wallet Balance',
+                style: GoogleFonts.inter(
+                  color: isDark ? DarkTheme.textPrimary : LightTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Obx(() {
+            final balance = profileController.walletBalance.value;
+            final amount = controller.finalTotal;
+            final remaining = balance - amount;
+            final hasSufficientBalance = balance >= amount;
+            
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Current Balance',
+                      style: GoogleFonts.inter(
+                        color: isDark ? DarkTheme.textSecondary : LightTheme.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      '\$${balance.toStringAsFixed(2)}',
+                      style: GoogleFonts.inter(
+                        color: isDark ? DarkTheme.textPrimary : LightTheme.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Amount to Pay',
+                      style: GoogleFonts.inter(
+                        color: isDark ? DarkTheme.textSecondary : LightTheme.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      '\$${amount.toStringAsFixed(2)}',
+                      style: GoogleFonts.inter(
+                        color: isDark ? DarkTheme.textPrimary : LightTheme.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Remaining Balance',
+                      style: GoogleFonts.inter(
+                        color: isDark ? DarkTheme.textSecondary : LightTheme.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      '\$${remaining.toStringAsFixed(2)}',
+                      style: GoogleFonts.inter(
+                        color: hasSufficientBalance ? Colors.green : Colors.red,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                if (!hasSufficientBalance) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning, color: Colors.red, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Insufficient balance. Please add funds or use another payment method.',
+                            style: GoogleFonts.inter(
+                              color: Colors.red,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // Cash Details
+  Widget _buildCashDetails(BookController controller, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 10),
+      decoration: BoxDecoration(
+        color: isDark ? DarkTheme.card : LightTheme.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.money, color: Colors.green, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                'Cash Payment',
+                style: GoogleFonts.inter(
+                  color: isDark ? DarkTheme.textPrimary : LightTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'You will pay \$${controller.finalTotal.toStringAsFixed(2)} in cash when the service is completed.',
+            style: GoogleFonts.inter(
+              color: isDark ? DarkTheme.textSecondary : LightTheme.textSecondary,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Handle payment processing and booking confirmation
+  Future<void> _handlePaymentAndBooking(BookController controller, BuildContext context) async {
+    final selectedMethod = controller.selectedPaymentMethod.value;
+    final paymentService = StripePaymentService();
+    final amount = controller.finalTotal;
+    
+    print('🔄 [BookScreen] Starting payment - Method: $selectedMethod, Amount: $amount');
+    
+    try {
+      // Process payment based on method
+      Map<String, dynamic>? paymentResult;
+      
+      if (selectedMethod == 'Credit Card') {
+        // Don't show loading dialog - Payment Sheet will handle its own UI
+        print('🔄 [BookScreen] Starting credit card payment with Payment Sheet');
+        
+        // Use Stripe Payment Sheet for credit card payment
+        // This will show a bottom sheet with card entry fields
+        paymentResult = await paymentService.presentPaymentSheet(
+          amount: amount,
+          currency: 'USD',
+          preferredPaymentMethod: 'Credit Card',
+        );
+        
+        print('✅ [BookScreen] Payment Sheet completed successfully');
+        
+      } else if (selectedMethod == 'Google Pay' || selectedMethod == 'Apple Pay') {
+        // Don't show loading dialog - Payment Sheet will handle its own UI
+        // The Payment Sheet will prioritize the selected payment method
+        print('🔄 [BookScreen] Starting ${selectedMethod} payment');
+        
+        // Use Stripe Payment Sheet with preferred payment method
+        // This will show the Payment Sheet with Google Pay/Apple Pay prioritized
+        paymentResult = await paymentService.presentPaymentSheet(
+          amount: amount,
+          currency: 'USD',
+          preferredPaymentMethod: selectedMethod, // Pass the selected method
+        );
+        
+        print('✅ [BookScreen] ${selectedMethod} payment completed');
+        
+      } else if (selectedMethod == 'Wallet') {
+        // Show loading
+        Get.dialog(
+          Center(child: CircularProgressIndicator()),
+          barrierDismissible: false,
+        );
+        
+        // Check wallet balance
+        final profileController = Get.find<ProfileController>();
+        final balance = profileController.walletBalance.value;
+        
+        if (balance < amount) {
+          Get.back(); // Close loading
+          Get.snackbar(
+            'Insufficient Balance',
+            'Your wallet balance is \$${balance.toStringAsFixed(2)}. Please add funds or use another payment method.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+            duration: const Duration(seconds: 4),
+          );
+          return;
+        }
+        
+        // Wallet payment is processed server-side during booking
+        // No need to process payment here, just proceed to booking
+        paymentResult = {'success': true, 'status': 'succeeded', 'method': 'wallet'};
+        Get.back(); // Close loading
+        
+      } else if (selectedMethod == 'Cash') {
+        // Cash payment - no processing needed
+        paymentResult = {'success': true, 'status': 'pending', 'method': 'cash'};
+      }
+      
+      // If payment succeeded (or cash/wallet), proceed with booking
+      if (paymentResult != null && (paymentResult['success'] == true || selectedMethod == 'Cash')) {
+        print('✅ [BookScreen] Payment successful, proceeding with booking');
+        await controller.confirmBooking(context);
+      } else {
+        throw Exception('Payment processing failed');
+      }
+      
+    } catch (e) {
+      // Close loading if still open
+      if (Get.isDialogOpen ?? false) {
+        Get.back();
+      }
+      
+      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      
+      // Show detailed error for debugging
+      print('❌ [BookScreen] Payment error: $errorMessage');
+      print('❌ [BookScreen] Error type: ${e.runtimeType}');
+      
+      Get.snackbar(
+        'Payment Failed',
+        errorMessage.contains('cancelled') || errorMessage.contains('canceled')
+            ? 'Payment cancelled by user'
+            : errorMessage.isEmpty 
+                ? 'An unknown error occurred. Please check console logs.'
+                : errorMessage,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+    }
   }
 
   // --- STAGE 4: PAYMENT SELECTION (NEW) ---
@@ -772,7 +1233,11 @@ class _BookScreenState extends State<BookScreen> {
         final bool isDarkTheme = Theme.of(Get.context!).brightness == Brightness.dark;
         return GestureDetector(
           onTap: () {
-            controller.selectedPaymentMethod.value = method['name'] as String;
+            final methodName = method['name'] as String;
+            controller.selectedPaymentMethod.value = methodName;
+            
+            // Just select the payment method - payment will be processed when user clicks Pay
+            // No navigation needed - payment details are shown inline
           },
         child: Container(
           margin: const EdgeInsets.only(bottom: 6),
@@ -1037,6 +1502,10 @@ class _BookScreenState extends State<BookScreen> {
                    Text('Payment Method', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.textPrimary: LightTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 10),
                   ...paymentMethods.map((method) => _buildPaymentCard(controller, method)).toList(),
+                  
+                  // Show payment method details inline
+                  const SizedBox(height: 20),
+                  Obx(() => _buildPaymentMethodDetails(controller, context)),
                 ],
               ),
             ),
@@ -1050,7 +1519,9 @@ class _BookScreenState extends State<BookScreen> {
                 child: SizedBox(
                   width: MediaQuery.of(Get.context!).size.width*0.5,
                   child: ElevatedButton(
-                    onPressed: controller.isStage4Complete ? () => controller.navigateToNextPage(Get.context!) : null,
+                    onPressed: controller.isStage4Complete 
+                        ? () => _handlePaymentAndBooking(controller, context) 
+                        : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(Get.context!).brightness == Brightness.dark? DarkTheme.primary: LightTheme.primary,
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1068,6 +1539,7 @@ class _BookScreenState extends State<BookScreen> {
     );
   }
 
+  // Removed unused method - payments are now processed inline using Payment Sheet
 
   // --- MAIN BUILD METHOD ---
 

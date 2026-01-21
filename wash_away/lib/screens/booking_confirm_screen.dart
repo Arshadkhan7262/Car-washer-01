@@ -1,7 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:wash_away/screens/dashboard_screen.dart';
 import 'package:wash_away/screens/track_order_screen.dart';
 import '../themes/dark_theme.dart';
@@ -455,7 +460,7 @@ Get.offAll(DashboardScreen());                },
                   children: <Widget>[
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () {},
+                        onPressed: () => _generateAndSaveReceipt(context),
                         icon: Image.asset('assets/images/download.png',width: 24,height: 24,color: Theme.of(context).brightness==Brightness.dark? Colors.white:Colors.black ,),
                         label: Text(
                           'Receipt',
@@ -479,7 +484,7 @@ Get.offAll(DashboardScreen());                },
                     const SizedBox(width: 12),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () {},
+                        onPressed: () => _generateAndShareReceipt(context),
                         icon:Image.asset(
                           'assets/images/share.png',
                           width: 24,
@@ -575,5 +580,444 @@ Get.offAll(DashboardScreen());                },
         ],
       ),
     );
+  }
+
+  // Generate PDF receipt
+  Future<pw.Document> _generateReceiptPDF() async {
+    // Get BookController to access selected values
+    final BookController? bookController = Get.isRegistered<BookController>() 
+        ? Get.find<BookController>() 
+        : null;
+    
+    // Extract booking ID
+    final bookingId = bookingData?['booking_id']?.toString() ?? 
+                     bookingData?['_id']?.toString() ?? 
+                     bookingData?['id']?.toString() ?? 
+                     'N/A';
+    
+    final String displayBookingId = bookingId.length > 8 
+        ? '#${bookingId.substring(bookingId.length - 8).toUpperCase()}'
+        : '#${bookingId.toUpperCase()}';
+    
+    // Extract total amount
+    double totalAmount = 0.0;
+    if (bookController != null) {
+      totalAmount = bookController.finalTotal;
+    }
+    if (totalAmount == 0.0 && bookingData != null) {
+      final apiTotal = bookingData?['total'] ?? 
+                       bookingData?['total_amount'] ?? 
+                       bookingData?['price'] ?? 
+                       bookingData?['amount'];
+      if (apiTotal != null) {
+        totalAmount = apiTotal is num ? apiTotal.toDouble() : 0.0;
+      }
+    }
+    
+    // Extract date & time
+    String formattedDateTime = 'N/A';
+    try {
+      DateTime? bookingDate;
+      String? timeSlot;
+      
+      if (bookController?.selectedDate.value != null) {
+        bookingDate = bookController!.selectedDate.value;
+      }
+      if (bookController?.selectedTime.value.isNotEmpty == true) {
+        timeSlot = bookController!.selectedTime.value;
+      }
+      
+      if (bookingDate == null) {
+        final apiDate = bookingData?['booking_date'] ?? bookingData?['date'] ?? bookingData?['scheduled_date'];
+        if (apiDate != null) {
+          if (apiDate is String) {
+            bookingDate = DateTime.tryParse(apiDate);
+          } else if (apiDate is DateTime) {
+            bookingDate = apiDate;
+          }
+        }
+      }
+      
+      if (timeSlot == null || timeSlot.isEmpty) {
+        timeSlot = bookingData?['time_slot']?.toString() ?? 
+                  bookingData?['time']?.toString() ??
+                  bookingData?['scheduled_time']?.toString();
+      }
+      
+      if (bookingDate != null && timeSlot != null && timeSlot.isNotEmpty) {
+        final dateFormat = DateFormat('EEEE, MMMM d, yyyy');
+        final formattedDate = dateFormat.format(bookingDate);
+        formattedDateTime = '$formattedDate at $timeSlot';
+      } else if (bookingDate != null) {
+        final dateFormat = DateFormat('EEEE, MMMM d, yyyy');
+        formattedDateTime = dateFormat.format(bookingDate);
+      }
+    } catch (e) {
+      formattedDateTime = 'Date not available';
+    }
+    
+    // Extract location
+    String location = 'Address not available';
+    if (bookController != null) {
+      if (bookController.selectedSavedAddress.value != null) {
+        location = bookController.selectedSavedAddress.value!.fullAddress;
+      } else if (bookController.addressController.text.isNotEmpty) {
+        location = bookController.addressController.text;
+      }
+    }
+    if (location == 'Address not available' && bookingData != null) {
+      location = bookingData?['address']?.toString() ?? 
+                bookingData?['location']?.toString() ?? 
+                bookingData?['full_address']?.toString() ??
+                bookingData?['address_text']?.toString() ??
+                'Address not available';
+    }
+    
+    // Extract service name
+    String serviceName = 'Service not available';
+    if (bookController?.selectedService.value != null) {
+      serviceName = bookController!.selectedService.value!.name;
+    }
+    if (serviceName == 'Service not available' && bookingData != null) {
+      if (bookingData?['service'] is Map) {
+        serviceName = bookingData?['service']?['name']?.toString() ?? 
+                     bookingData?['service']?['service_name']?.toString() ??
+                     'Service not available';
+      } else {
+        serviceName = bookingData?['service_name']?.toString() ?? 
+                     bookingData?['service']?.toString() ??
+                     'Service not available';
+      }
+    }
+    
+    // Extract vehicle type
+    String vehicleType = 'Vehicle type not available';
+    if (bookController?.selectedVehicleType.value != null) {
+      vehicleType = bookController!.selectedVehicleType.value!.displayName;
+    }
+    if (vehicleType == 'Vehicle type not available' && bookingData != null) {
+      if (bookingData?['vehicle_type'] is Map) {
+        vehicleType = bookingData?['vehicle_type']?['name']?.toString() ?? 
+                     bookingData?['vehicle_type']?['display_name']?.toString() ??
+                     bookingData?['vehicle_type']?['type']?.toString() ??
+                     'Vehicle type not available';
+      } else if (bookingData?['vehicle'] is Map) {
+        vehicleType = bookingData?['vehicle']?['type']?.toString() ?? 
+                     bookingData?['vehicle']?['vehicle_type']?.toString() ??
+                     'Vehicle type not available';
+      } else {
+        vehicleType = bookingData?['vehicle_type_name']?.toString() ?? 
+                     bookingData?['vehicle_type']?.toString() ??
+                     'Vehicle type not available';
+      }
+    }
+    
+    // Create PDF document
+    final pdf = pw.Document();
+    
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(40),
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Header
+              pw.Center(
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'Wash Away',
+                      style: pw.TextStyle(
+                        fontSize: 28,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue,
+                      ),
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Text(
+                      'Booking Receipt',
+                      style: pw.TextStyle(
+                        fontSize: 20,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 30),
+              pw.Divider(),
+              pw.SizedBox(height: 20),
+              
+              // Booking ID and Total Amount
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'Booking ID',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        displayBookingId,
+                        style: pw.TextStyle(
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'Total Amount',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        '\$${totalAmount.toStringAsFixed(2)}',
+                        style: pw.TextStyle(
+                          fontSize: 18,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 30),
+              
+              // Booking Details
+              pw.Text(
+                'Booking Details',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 15),
+              
+              // Date & Time
+              _buildReceiptRow('Date & Time', formattedDateTime),
+              pw.SizedBox(height: 12),
+              
+              // Location
+              _buildReceiptRow('Location', location),
+              pw.SizedBox(height: 12),
+              
+              // Service
+              _buildReceiptRow('Service', serviceName),
+              pw.SizedBox(height: 12),
+              
+              // Vehicle Type
+              _buildReceiptRow('Vehicle Type', vehicleType),
+              pw.SizedBox(height: 30),
+              
+              pw.Divider(),
+              pw.SizedBox(height: 20),
+              
+              // Footer
+              pw.Center(
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'Thank you for choosing Wash Away!',
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontStyle: pw.FontStyle.italic,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Text(
+                      'Generated on ${DateFormat('MMMM d, yyyy at hh:mm a').format(DateTime.now())}',
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    
+    return pdf;
+  }
+  
+  // Helper method to build receipt rows
+  pw.Widget _buildReceiptRow(String label, String value) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(
+          width: 100,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.grey700,
+            ),
+          ),
+        ),
+        pw.Expanded(
+          child: pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  // Generate and save receipt to device
+  Future<void> _generateAndSaveReceipt(BuildContext context) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+      
+      // Generate PDF
+      final pdf = await _generateReceiptPDF();
+      
+      // Get directory for saving - use app's documents directory (no permissions needed)
+      Directory directory;
+      if (Platform.isAndroid) {
+        // For Android, use external storage directory (app-specific, no permissions needed on Android 10+)
+        // This saves to: /storage/emulated/0/Android/data/com.example.wash_away/files/
+        // Android 10+ (API 29+) uses scoped storage - app's own directory doesn't need permissions
+        final externalDir = await getExternalStorageDirectory();
+        directory = externalDir ?? await getApplicationDocumentsDirectory();
+      } else {
+        // iOS - use application documents directory (no permissions needed)
+        directory = await getApplicationDocumentsDirectory();
+      }
+      
+      // Create a "Receipts" subdirectory for better organization
+      final receiptsDir = Directory('${directory.path}/Receipts');
+      if (!await receiptsDir.exists()) {
+        await receiptsDir.create(recursive: true);
+      }
+      
+      // Generate filename
+      final bookingId = bookingData?['booking_id']?.toString() ?? 
+                       bookingData?['_id']?.toString() ?? 
+                       bookingData?['id']?.toString() ?? 
+                       'booking';
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final fileName = 'WashAway_Receipt_${bookingId}_$timestamp.pdf';
+      final filePath = '${receiptsDir.path}/$fileName';
+      
+      // Save PDF file
+      final file = File(filePath);
+      final pdfBytes = await pdf.save();
+      await file.writeAsBytes(pdfBytes);
+      
+      Get.back(); // Close loading
+      
+      // Show success message with user-friendly path
+      final userFriendlyPath = Platform.isAndroid 
+          ? 'Receipts folder in app storage'
+          : 'Receipts folder in app documents';
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('✅ Receipt saved successfully!'),
+              const SizedBox(height: 4),
+              Text(
+                'Location: $userFriendlyPath',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      Get.back(); // Close loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving receipt: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+  
+  // Generate and share receipt
+  Future<void> _generateAndShareReceipt(BuildContext context) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+      
+      // Generate PDF
+      final pdf = await _generateReceiptPDF();
+      
+      // Get temporary directory
+      final directory = await getTemporaryDirectory();
+      final bookingId = bookingData?['booking_id']?.toString() ?? 
+                       bookingData?['_id']?.toString() ?? 
+                       bookingData?['id']?.toString() ?? 
+                       'booking';
+      final fileName = 'WashAway_Receipt_$bookingId.pdf';
+      final filePath = '${directory.path}/$fileName';
+      
+      // Save PDF to temporary file
+      final file = File(filePath);
+      final pdfBytes = await pdf.save();
+      await file.writeAsBytes(pdfBytes);
+      
+      Get.back(); // Close loading
+      
+      // Share the file
+      await Share.shareXFiles(
+        [XFile(filePath)],
+        text: 'Wash Away Booking Receipt',
+        subject: 'Booking Receipt - $bookingId',
+      );
+    } catch (e) {
+      Get.back(); // Close loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sharing receipt: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }
