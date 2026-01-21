@@ -122,6 +122,10 @@ class BookController extends GetxController {
   final TextEditingController couponController = TextEditingController();
   final RxString selectedPaymentMethod = 'Credit Card'.obs;
   
+  // Reactive variables to track text field changes for Obx reactivity
+  final RxString addressText = ''.obs;
+  final RxString additionalLocationText = ''.obs;
+  
   // Selected saved address and vehicle
   final Rx<Address?> selectedSavedAddress = Rx<Address?>(null);
   final Rx<AddVehicleModel?> selectedSavedVehicle = Rx<AddVehicleModel?>(null);
@@ -134,11 +138,35 @@ class BookController extends GetxController {
 
   // Validation
   bool get isStage2Complete => selectedVehicleType.value != null || selectedVehicle.value != null;
-  bool get isStage3Complete =>
-      selectedDate.value != null &&
-      selectedTime.value.isNotEmpty &&
-      addressController.text.trim().isNotEmpty &&
-      additionalLocationController.text.trim().isNotEmpty; // Add validation for new controller
+  
+  // Reactive validation for Stage 3
+  // This getter accesses Rx values so it will be tracked by Obx
+  bool get isStage3Complete {
+    // Date is defaulted when Stage 3 loads, so just check it's not null
+    final hasDate = selectedDate.value != null;
+    
+    // Time is defaulted to '10:00 AM', so we don't require it to be changed
+    // Just ensure it's not empty (should always be set by default)
+    final hasTime = selectedTime.value.isNotEmpty;
+    
+    // Address: either saved address is selected OR manual address is entered
+    // Use reactive variables for proper Obx tracking
+    final savedAddr = selectedSavedAddress.value;
+    final manualAddr = addressText.value.trim();
+    final hasAddress = savedAddr != null || manualAddr.isNotEmpty;
+    
+    // Vehicle: either vehicle type from stage 2 OR saved vehicle is selected
+    // Access both Rx values to ensure reactivity
+    final vehicleType = selectedVehicleType.value;
+    final savedVehicle = selectedSavedVehicle.value;
+    final hasVehicle = vehicleType != null || savedVehicle != null;
+    
+    // Additional location controller must have text
+    // Use reactive variable for proper Obx tracking
+    final hasAdditionalLocation = additionalLocationText.value.trim().isNotEmpty;
+    
+    return hasDate && hasTime && hasAddress && hasVehicle && hasAdditionalLocation;
+  }
   bool get isStage4Complete => selectedPaymentMethod.value.isNotEmpty;
 
   @override
@@ -163,6 +191,8 @@ class BookController extends GetxController {
     
     // Always initialize listeners (needed for UI updates)
     addressController.addListener(() {
+      // Update reactive variable for Obx tracking
+      addressText.value = addressController.text;
       _updateState();
       // Clear saved address selection if user manually edits the address field
       // (but only if the text doesn't match the selected saved address)
@@ -175,7 +205,11 @@ class BookController extends GetxController {
         }
       }
     });
-    additionalLocationController.addListener(_updateState);
+    additionalLocationController.addListener(() {
+      // Update reactive variable for Obx tracking
+      additionalLocationText.value = additionalLocationController.text;
+      _updateState();
+    });
     couponController.addListener(() {
       // Clear coupon error when user types
       if (couponError.value.isNotEmpty) {
@@ -205,7 +239,9 @@ class BookController extends GetxController {
     selectedDate.value = DateTime.now();
     selectedTime.value = '10:00 AM';
     addressController.clear();
+    addressText.value = ''; // Clear reactive variable
     additionalLocationController.clear();
+    additionalLocationText.value = ''; // Clear reactive variable
     selectedPaymentMethod.value = 'Credit Card';
     
     // Reset PageController
@@ -410,6 +446,7 @@ class BookController extends GetxController {
           if (existingSelection.id != selectedSavedAddress.value!.id) {
             selectedSavedAddress.value = existingSelection;
             addressController.text = existingSelection.fullAddress;
+            addressText.value = existingSelection.fullAddress; // Update reactive variable
             print('📍 [BookController] Updated address selection: ${existingSelection.fullAddress}');
           }
         } catch (e) {
@@ -424,11 +461,17 @@ class BookController extends GetxController {
           final defaultAddress = addresses.firstWhere((a) => a.isDefault, orElse: () => addresses.first);
           selectedSavedAddress.value = defaultAddress;
           addressController.text = defaultAddress.fullAddress;
+          addressText.value = defaultAddress.fullAddress; // Update reactive variable
           print('📍 [BookController] Set default address: ${defaultAddress.fullAddress}');
+          // Trigger update after setting default
+          _updateState();
         } catch (e) {
           // If firstWhere fails, just use first
           selectedSavedAddress.value = addresses.first;
           addressController.text = addresses.first.fullAddress;
+          addressText.value = addresses.first.fullAddress; // Update reactive variable
+          // Trigger update after setting default
+          _updateState();
         }
       }
       
@@ -479,9 +522,13 @@ class BookController extends GetxController {
           final defaultVehicle = vehicles.firstWhere((v) => v.isDefault, orElse: () => vehicles.first);
           selectedSavedVehicle.value = defaultVehicle;
           print('🚗 [BookController] Set default vehicle: ${defaultVehicle.nameAndDetails}');
+          // Trigger update after setting default
+          _updateState();
         } catch (e) {
           // If firstWhere fails, just use first
           selectedSavedVehicle.value = vehicles.first;
+          // Trigger update after setting default
+          _updateState();
         }
       }
       
@@ -511,6 +558,10 @@ class BookController extends GetxController {
 
   void _updateState() {
     update(); // Trigger rebuild for button enablement
+    // Also trigger reactive updates for Rx values
+    selectedSavedAddress.refresh();
+    selectedSavedVehicle.refresh();
+    selectedVehicleType.refresh();
   }
 
   /// Get subtotal (base price)
@@ -686,6 +737,10 @@ class BookController extends GetxController {
         if (selectedTime.value.isEmpty) {
           selectedTime.value = '10:00 AM';
         }
+        
+        // Initialize reactive text variables from controllers
+        addressText.value = addressController.text;
+        additionalLocationText.value = additionalLocationController.text;
         
         // Refresh saved addresses and vehicles when entering stage 3
         fetchSavedAddresses();

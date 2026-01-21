@@ -61,6 +61,18 @@ class AppConstants {
   // Validation
   static const int minPasswordLength = 6;
   static const int maxPasswordLength = 50;
+
+  // Stripe Configuration
+  // TODO: Replace with your Stripe publishable key
+  // Get it from: https://dashboard.stripe.com/apikeys
+  static const String stripePublishableKey = 'pk_test_51SrHGn3TRO6sevNJDFTQKVOjH4kwWqpEFMYYmZblh9UzM2fVGsHJVjEaEddB9L4JiaGBG1dYyTBhjN57sKXC8tjf00NWyusAes';
+  
+  // Apple Pay Configuration
+  // TODO: Get your merchant identifier from Apple Developer account
+  // Follow this guide: https://support.stripe.com/questions/enable-apple-pay-on-your-stripe-account
+  // Format: merchant.com.yourcompany.appname
+  // Leave empty if Apple Pay is not configured yet
+  static const String applePayMerchantIdentifier = ''; // e.g., 'merchant.com.washaway.app'
 }
 
 
