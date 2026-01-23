@@ -1,0 +1,488 @@
+{
+	"info": {
+		"_postman_id": "stripe-payment-api-collection",
+		"name": "Stripe Payment API - Car Wash Pro",
+		"description": "Complete Stripe payment integration APIs for Car Wash Pro platform",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{auth_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "stripe_customer_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "payment_intent_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "booking_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "washer_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Public Endpoints",
+			"item": [
+				{
+					"name": "Get Stripe Publishable Key",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has publishableKey\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.eql(true);",
+									"    pm.expect(jsonData.data.publishableKey).to.exist;",
+									"    pm.expect(jsonData.data.publishableKey).to.include(\"pk_test\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/stripe/publishable-key",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"stripe",
+								"publishable-key"
+							]
+						},
+						"description": "Get Stripe publishable key. Call this once on app launch and cache the key."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Customer Endpoints",
+			"item": [
+				{
+					"name": "Create Stripe Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Response has stripeCustomerId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.eql(true);",
+									"    pm.expect(jsonData.data.stripeCustomerId).to.exist;",
+									"    ",
+									"    // Save stripeCustomerId to variable",
+									"    pm.collectionVariables.set(\"stripe_customer_id\", jsonData.data.stripeCustomerId);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"customer@example.com\",\n    \"name\": \"John Doe\",\n    \"role\": \"customer\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/stripe/customer",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"stripe",
+								"customer"
+							]
+						},
+						"description": "Create a Stripe customer and save the customer ID to MongoDB. Call this once per user (or check if user already has stripeCustomerId)."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Payment Intent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Response has clientSecret\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.eql(true);",
+									"    pm.expect(jsonData.data.clientSecret).to.exist;",
+									"    pm.expect(jsonData.data.paymentIntentId).to.exist;",
+									"    ",
+									"    // Save payment intent ID to variable",
+									"    pm.collectionVariables.set(\"payment_intent_id\", jsonData.data.paymentIntentId);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"stripeCustomerId\": \"{{stripe_customer_id}}\",\n    \"amount\": 3000,\n    \"currency\": \"usd\",\n    \"bookingId\": \"{{booking_id}}\",\n    \"washerId\": \"{{washer_id}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/stripe/create-payment-intent",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"stripe",
+								"create-payment-intent"
+							]
+						},
+						"description": "Create a Stripe PaymentIntent for a booking. Returns clientSecret that Flutter app uses to confirm payment.\n\n**Important:**\n- amount must be in cents (3000 = $30.00)\n- amount must be a positive integer\n- bookingId is required (MongoDB booking ID)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Payment History",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has payments array\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.eql(true);",
+									"    pm.expect(jsonData.data.payments).to.be.an('array');",
+									"    pm.expect(jsonData.data.pagination).to.exist;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/stripe/payment-history/{{stripe_customer_id}}?page=1&limit=20&sort=-created_date",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"stripe",
+								"payment-history",
+								"{{stripe_customer_id}}"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "sort",
+									"value": "-created_date"
+								}
+							]
+						},
+						"description": "Get all payment history for a Stripe customer.\n\n**Query Parameters:**\n- page: Page number (default: 1)\n- limit: Items per page (default: 20)\n- sort: Sort field and order (default: -created_date)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. Washer Endpoints",
+			"item": [
+				{
+					"name": "Get Washer Earnings History",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has earnings array\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.eql(true);",
+									"    pm.expect(jsonData.data.earnings).to.be.an('array');",
+									"    pm.expect(jsonData.data.pagination).to.exist;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/stripe/washer/earnings/{{washer_id}}?page=1&limit=20&sort=-created_date",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"stripe",
+								"washer",
+								"earnings",
+								"{{washer_id}}"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "sort",
+									"value": "-created_date"
+								}
+							]
+						},
+						"description": "Get all earnings history for a washer (only succeeded payments).\n\n**Query Parameters:**\n- page: Page number (default: 1)\n- limit: Items per page (default: 20)\n- sort: Sort field and order (default: -created_date)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. Admin Endpoints",
+			"item": [
+				{
+					"name": "Get All Payments",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has payments array\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.eql(true);",
+									"    pm.expect(jsonData.data.payments).to.be.an('array');",
+									"    pm.expect(jsonData.data.pagination).to.exist;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/stripe/admin/payments?page=1&limit=50&sort=-created_date",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"stripe",
+								"admin",
+								"payments"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "succeeded",
+									"description": "Filter by status: pending, succeeded, failed, canceled, refunded",
+									"disabled": true
+								},
+								{
+									"key": "paymentMethod",
+									"value": "card",
+									"description": "Filter by payment method",
+									"disabled": true
+								},
+								{
+									"key": "customerId",
+									"value": "",
+									"description": "Filter by customer MongoDB ID",
+									"disabled": true
+								},
+								{
+									"key": "washerId",
+									"value": "",
+									"description": "Filter by washer MongoDB ID",
+									"disabled": true
+								},
+								{
+									"key": "dateFrom",
+									"value": "2025-01-01",
+									"description": "Filter from date (ISO 8601)",
+									"disabled": true
+								},
+								{
+									"key": "dateTo",
+									"value": "2025-01-31",
+									"description": "Filter to date (ISO 8601)",
+									"disabled": true
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "sort",
+									"value": "-created_date"
+								}
+							]
+						},
+						"description": "Get all payments with optional filters. Used by admin dashboard.\n\n**Query Parameters:**\n- status: Filter by payment status\n- paymentMethod: Filter by payment method\n- customerId: Filter by customer MongoDB ID\n- washerId: Filter by washer MongoDB ID\n- dateFrom: Filter from date (ISO 8601)\n- dateTo: Filter to date (ISO 8601)\n- page: Page number (default: 1)\n- limit: Items per page (default: 50)\n- sort: Sort field and order (default: -created_date)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "5. Webhook (Stripe)",
+			"item": [
+				{
+					"name": "Stripe Webhook Handler",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Webhook received\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.received).to.eql(true);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Stripe-Signature",
+								"value": "t=1234567890,v1=signature_here",
+								"description": "Stripe webhook signature (automatically added by Stripe)"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": \"evt_test_webhook\",\n    \"object\": \"event\",\n    \"type\": \"payment_intent.succeeded\",\n    \"data\": {\n        \"object\": {\n            \"id\": \"pi_test_123\",\n            \"object\": \"payment_intent\",\n            \"status\": \"succeeded\",\n            \"amount\": 3000,\n            \"currency\": \"usd\",\n            \"customer\": \"cus_test_123\"\n        }\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/stripe/webhook",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"stripe",
+								"webhook"
+							]
+						},
+						"description": "Stripe webhook endpoint for payment events.\n\n**Note:** This endpoint uses raw body parsing. In production, configure webhook secret in Stripe dashboard and set STRIPE_WEBHOOK_SECRET in .env.\n\n**Events Handled:**\n- payment_intent.succeeded\n- payment_intent.payment_failed\n- payment_intent.canceled"
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

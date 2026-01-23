@@ -918,6 +918,191 @@
 					}
 				}
 			]
+		},
+		{
+			"name": "Stripe Payment APIs",
+			"item": [
+				{
+					"name": "Get Stripe Publishable Key",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/stripe/publishable-key",
+							"host": ["{{base_url}}"],
+							"path": ["stripe", "publishable-key"]
+						},
+						"description": "Get Stripe publishable key. Call this once on app launch and cache the key."
+					}
+				},
+				{
+					"name": "Create Stripe Customer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\",\n  \"name\": \"John Doe\",\n  \"role\": \"customer\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/stripe/customer",
+							"host": ["{{base_url}}"],
+							"path": ["stripe", "customer"]
+						},
+						"description": "Create a Stripe customer and save the customer ID to MongoDB. Call this once per user."
+					}
+				},
+				{
+					"name": "Create Payment Intent",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"stripeCustomerId\": \"{{stripe_customer_id}}\",\n  \"amount\": 3000,\n  \"currency\": \"usd\",\n  \"bookingId\": \"{{booking_id}}\",\n  \"washerId\": \"{{washer_id}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/stripe/create-payment-intent",
+							"host": ["{{base_url}}"],
+							"path": ["stripe", "create-payment-intent"]
+						},
+						"description": "Create a Stripe PaymentIntent for a booking. Returns clientSecret that Flutter app uses to confirm payment.\n\n**Important:**\n- amount must be in cents (3000 = $30.00)\n- amount must be a positive integer\n- bookingId is required (MongoDB booking ID)"
+					}
+				},
+				{
+					"name": "Get Customer Payment History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/stripe/payment-history/{{stripe_customer_id}}?page=1&limit=20&sort=-created_date",
+							"host": ["{{base_url}}"],
+							"path": ["stripe", "payment-history", "{{stripe_customer_id}}"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "sort",
+									"value": "-created_date"
+								}
+							]
+						},
+						"description": "Get all payment history for a Stripe customer."
+					}
+				},
+				{
+					"name": "Get Washer Earnings History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{washer_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/stripe/washer/earnings/{{washer_id}}?page=1&limit=20&sort=-created_date",
+							"host": ["{{base_url}}"],
+							"path": ["stripe", "washer", "earnings", "{{washer_id}}"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "sort",
+									"value": "-created_date"
+								}
+							]
+						},
+						"description": "Get all earnings history for a washer (only succeeded payments)."
+					}
+				},
+				{
+					"name": "Get All Payments (Admin)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/stripe/admin/payments?page=1&limit=50&sort=-created_date",
+							"host": ["{{base_url}}"],
+							"path": ["stripe", "admin", "payments"],
+							"query": [
+								{
+									"key": "status",
+									"value": "succeeded",
+									"description": "Filter by status: pending, succeeded, failed, canceled, refunded",
+									"disabled": true
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "sort",
+									"value": "-created_date"
+								}
+							]
+						},
+						"description": "Get all payments with optional filters. Used by admin dashboard."
+					}
+				}
+			]
 		}
 	],
 	"variable": [
@@ -948,6 +1133,26 @@
 		},
 		{
 			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "stripe_customer_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "payment_intent_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "booking_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "washer_id",
 			"value": "",
 			"type": "string"
 		}

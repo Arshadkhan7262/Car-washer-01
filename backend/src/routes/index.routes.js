@@ -79,6 +79,10 @@ router.use('/customer/notifications', customerNotificationRoutes); // Notificati
 import vehicleTypeRoutes from './vehicleType.routes.js';
 router.use('/admin/vehicle-types', vehicleTypeRoutes); // Vehicle types: admin CRUD operations
 
+// Stripe Payment routes
+import stripePaymentRoutes from './stripePayment.routes.js';
+router.use('/stripe', stripePaymentRoutes); // Stripe payment endpoints
+
 export default router;
 
 

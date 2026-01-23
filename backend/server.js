@@ -18,6 +18,11 @@ const app = express();
 
 // Middleware
 app.use(cors());
+
+// Stripe webhook needs raw body for signature verification
+// Must be before express.json() middleware
+app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -118,8 +123,12 @@ const localIP = getLocalIP();
 
 const startServer = async () => {
   try {
-    // Connect to MongoDB
-    await connectDatabase();
+    // Connect to MongoDB (non-blocking - server will start even if MongoDB fails)
+    connectDatabase().catch((error) => {
+      console.error('⚠️ MongoDB connection failed, but server will continue running');
+      console.error('   You can still test API endpoints, but database operations will fail');
+      console.error('   Fix MongoDB connection to enable full functionality');
+    });
 
     // Start server - bind to 0.0.0.0 to allow network access
     app.listen(PORT, '0.0.0.0', () => {
@@ -128,6 +137,7 @@ const startServer = async () => {
       console.log(`🌐 Local API URL: http://localhost:${PORT}/api/v1`);
       console.log(`🌐 Network API URL: http://${localIP}:${PORT}/api/v1`);
       console.log(`\n💡 Use the Network API URL to access from other devices on the same network`);
+      console.log(`⚠️ Note: MongoDB connection may still be in progress...`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

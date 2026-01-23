@@ -9,11 +9,14 @@ const connectDatabase = async () => {
 
     // Connection options to handle DNS and network issues
     const connectionOptions = {
-      serverSelectionTimeoutMS: 10000, // Timeout after 10s instead of 30s
+      serverSelectionTimeoutMS: 30000, // Timeout after 30s (increased for DNS resolution)
       socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-      connectTimeoutMS: 10000, // Give up initial connection after 10s
+      connectTimeoutMS: 30000, // Give up initial connection after 30s (increased for DNS)
       retryWrites: true,
       retryReads: true,
+      // Additional options for better connection handling
+      maxPoolSize: 10,
+      minPoolSize: 1,
     };
 
     console.log('🔄 Attempting to connect to MongoDB...');
@@ -23,7 +26,7 @@ const connectDatabase = async () => {
     console.error(`❌ MongoDB connection error: ${error.message}`);
     
     // Provide helpful error messages
-    if (error.message.includes('querySrv') || error.message.includes('EREFUSED')) {
+    if (error.message.includes('querySrv') || error.message.includes('EREFUSED') || error.message.includes('ETIMEOUT') || error.message.includes('queryTxt')) {
       console.error('\n💡 DNS Resolution Error Detected!');
       console.error('   This usually means:');
       console.error('   1. DNS server cannot resolve MongoDB Atlas SRV records');
@@ -46,7 +49,9 @@ const connectDatabase = async () => {
       }
     }
     
-    process.exit(1);
+    // Don't exit process - let server continue running
+    // The error will be caught by server.js
+    throw error;
   }
 };
 

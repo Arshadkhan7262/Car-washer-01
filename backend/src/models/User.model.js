@@ -128,6 +128,12 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Stripe Customer ID
+  stripeCustomerId: {
+    type: String,
+    trim: true,
+    sparse: true
+  },
   lastLogin: {
     type: Date,
     default: null
