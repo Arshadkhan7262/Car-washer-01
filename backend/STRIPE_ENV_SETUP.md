@@ -6,7 +6,7 @@ Add the following variables to your `.env` file in the `backend` directory:
 
 ```env
 # Stripe Configuration
-STRIPE_SECRET_KEY=sk_test_51RLB5nPdbAWpbZ8zaxaskODi8aLOduup3HImwvuRzcWA3OhtDSzg6Xj10FGOp9f61HHz71Fi7STVtKKwW1DVS7mE00E0tOwOMG
+STRIPE_SECRET_KEY=sk_test_xxx_your_stripe_secret_key_here
 STRIPE_PUBLISHABLE_KEY=pk_test_51RLB5nPdbAWpbZ8zjW263HT7LnFIcz813twUFCpk5T6PR2MqGuoWdR8wmeWuHc19Gmb7zxWXWLL3pKEdqVMCHyVQ00XH7POBCZ
 
 # Stripe Webhook Secret (Optional - for production)

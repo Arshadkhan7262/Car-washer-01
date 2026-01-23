@@ -920,7 +920,247 @@
 			]
 		},
 		{
+			"name": "Customer Authentication (Email - UI Flow)",
+			"item": [
+				{
+					"name": "1. Register Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.user) {",
+									"        pm.collectionVariables.set(\"customer_user_id\", jsonData.data.user.id || jsonData.data.user._id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"password123\",\n  \"name\": \"John Customer\",\n  \"phone\": \"+1234567890\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/customer/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["customer", "auth", "register"]
+						},
+						"description": "Register a new customer account. Returns success message directing user to verify email. email_verified=false"
+					}
+				},
+				{
+					"name": "2. Send Email OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/customer/auth/send-email-otp",
+							"host": ["{{base_url}}"],
+							"path": ["customer", "auth", "send-email-otp"]
+						},
+						"description": "Send 4-digit OTP to email. OTP expires in 5 minutes."
+					}
+				},
+				{
+					"name": "3. Verify Email OTP",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.collectionVariables.set(\"customer_token\", jsonData.data.token);",
+									"    }",
+									"    if (jsonData.data && jsonData.data.user) {",
+									"        pm.collectionVariables.set(\"customer_user_id\", jsonData.data.user.id || jsonData.data.user._id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\",\n  \"otp\": \"1234\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/customer/auth/verify-email-otp",
+							"host": ["{{base_url}}"],
+							"path": ["customer", "auth", "verify-email-otp"]
+						},
+						"description": "Verify 4-digit OTP. Returns tokens if email is verified."
+					}
+				},
+				{
+					"name": "4. Login Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.collectionVariables.set(\"customer_token\", jsonData.data.token);",
+									"    }",
+									"    if (jsonData.data && jsonData.data.user) {",
+									"        pm.collectionVariables.set(\"customer_user_id\", jsonData.data.user.id || jsonData.data.user._id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\",\n  \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/customer/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["customer", "auth", "login"]
+						},
+						"description": "Login with email and password. Requires: email_verified=true"
+					}
+				},
+				{
+					"name": "Get Customer Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{customer_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/customer/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["customer", "auth", "me"]
+						},
+						"description": "Get current customer profile (requires authentication)"
+					}
+				},
+				{
+					"name": "5. Forgot Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/customer/auth/forgot-password",
+							"host": ["{{base_url}}"],
+							"path": ["customer", "auth", "forgot-password"]
+						},
+						"description": "Request password reset OTP. OTP expires in 5 minutes."
+					}
+				},
+				{
+					"name": "6. Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"customer@example.com\",\n  \"otp\": \"1234\",\n  \"newPassword\": \"newpassword123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/customer/auth/reset-password",
+							"host": ["{{base_url}}"],
+							"path": ["customer", "auth", "reset-password"]
+						},
+						"description": "Reset password with OTP and new password."
+					}
+				}
+			]
+		},
+		{
 			"name": "Stripe Payment APIs",
+			"description": "⚠️ **IMPORTANT FLOW:**\n1. First, create customer account using \"Customer Authentication\" section above\n2. Login customer to get customer_token\n3. Create Stripe Customer (saves stripeCustomerId)\n4. Then use other Stripe payment endpoints\n\n**Prerequisites:**\n- Customer must be registered and logged in\n- customer_token must be set from login response",
 			"item": [
 				{
 					"name": "Get Stripe Publishable Key",
@@ -940,6 +1180,28 @@
 				},
 				{
 					"name": "Create Stripe Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Response has stripeCustomerId\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.eql(true);",
+									"    pm.expect(jsonData.data.stripeCustomerId).to.exist;",
+									"    ",
+									"    // Save stripeCustomerId to variable",
+									"    pm.collectionVariables.set(\"stripe_customer_id\", jsonData.data.stripeCustomerId);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [
@@ -966,7 +1228,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["stripe", "customer"]
 						},
-						"description": "Create a Stripe customer and save the customer ID to MongoDB. Call this once per user."
+						"description": "⚠️ IMPORTANT: Customer must be logged in first (use Customer Authentication endpoints above).\n\nCreate a Stripe customer and save the customer ID to MongoDB. Call this once per user after customer registration and login.\n\n**Prerequisites:**\n1. Customer must be registered (POST /customer/auth/register)\n2. Customer must be logged in (POST /customer/auth/login)\n3. Set customer_token variable from login response"
 					}
 				},
 				{
@@ -997,7 +1259,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["stripe", "create-payment-intent"]
 						},
-						"description": "Create a Stripe PaymentIntent for a booking. Returns clientSecret that Flutter app uses to confirm payment.\n\n**Important:**\n- amount must be in cents (3000 = $30.00)\n- amount must be a positive integer\n- bookingId is required (MongoDB booking ID)"
+						"description": "⚠️ **Prerequisites:**\n1. Customer must be logged in (customer_token required)\n2. Stripe customer must be created (stripe_customer_id required)\n3. Booking must exist (booking_id required)\n\nCreate a Stripe PaymentIntent for a booking. Returns clientSecret that Flutter app uses to confirm payment.\n\n**Important:**\n- amount must be in cents (3000 = $30.00)\n- amount must be a positive integer\n- bookingId is required (MongoDB booking ID)\n- stripeCustomerId is automatically used from authenticated customer if not provided"
 					}
 				},
 				{
@@ -1153,6 +1415,11 @@
 		},
 		{
 			"key": "washer_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "customer_user_id",
 			"value": "",
 			"type": "string"
 		}
