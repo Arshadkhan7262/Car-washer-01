@@ -7,7 +7,7 @@
 2. **Add your Stripe secret key** to the `.env` file:
 
 ```env
-STRIPE_SECRET_KEY=sk_test_xxx_your_stripe_secret_key_here
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key_here
 ```
 
 3. **Make sure your `.env` file includes other required variables** (MongoDB, JWT, etc.)
@@ -25,7 +25,7 @@ JWT_EXPIRE=24h
 JWT_REFRESH_EXPIRE=7d
 
 # Stripe Configuration
-STRIPE_SECRET_KEY=sk_test_xxx_your_stripe_secret_key_here
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key_here
 
 # Server Configuration
 PORT=3000
