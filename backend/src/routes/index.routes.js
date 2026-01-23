@@ -75,6 +75,10 @@ router.use('/customer/coupons', customerCouponRoutes); // Coupons: customer coup
 import customerNotificationRoutes from './customerNotification.routes.js';
 router.use('/customer/notifications', customerNotificationRoutes); // Notifications: FCM token management
 
+// Payment routes (Stripe integration)
+import paymentRoutes from './payment.routes.js';
+router.use('/customer/payment', paymentRoutes); // Payments: Stripe payment intents for customers
+
 // Admin Vehicle Type routes
 import vehicleTypeRoutes from './vehicleType.routes.js';
 router.use('/admin/vehicle-types', vehicleTypeRoutes); // Vehicle types: admin CRUD operations

@@ -406,11 +406,15 @@ class HistoryScreen extends StatelessWidget {
       children: [
         Icon(icon, size: 18,),
         const SizedBox(width: 8),
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            color: Theme.of(Get.context!).brightness== Brightness.dark? DarkTheme.textPrimary.withValues(alpha: 0.48):LightTheme.textPrimary.withValues(alpha: 0.48),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: Theme.of(Get.context!).brightness== Brightness.dark? DarkTheme.textPrimary.withValues(alpha: 0.48):LightTheme.textPrimary.withValues(alpha: 0.48),
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
         ),
       ],

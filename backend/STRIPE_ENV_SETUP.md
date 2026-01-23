@@ -1,64 +1,54 @@
-# Stripe Environment Variables Setup
+# Stripe Environment Variable Setup
 
-## Required Environment Variables
+## Quick Setup
 
-Add the following variables to your `.env` file in the `backend` directory:
+1. **Create `.env` file** in the `backend/` directory (if it doesn't exist)
+
+2. **Add your Stripe secret key** to the `.env` file:
 
 ```env
+STRIPE_SECRET_KEY=sk_test_xxx_your_stripe_secret_key_here
+```
+
+3. **Make sure your `.env` file includes other required variables** (MongoDB, JWT, etc.)
+
+## Complete .env File Example
+
+```env
+# MongoDB Configuration
+MONGODB_URI=your_mongodb_uri_here
+
+# JWT Configuration
+JWT_SECRET=your_jwt_secret_here
+JWT_REFRESH_SECRET=your_jwt_refresh_secret_here
+JWT_EXPIRE=24h
+JWT_REFRESH_EXPIRE=7d
+
 # Stripe Configuration
 STRIPE_SECRET_KEY=sk_test_xxx_your_stripe_secret_key_here
-STRIPE_PUBLISHABLE_KEY=pk_test_51RLB5nPdbAWpbZ8zjW263HT7LnFIcz813twUFCpk5T6PR2MqGuoWdR8wmeWuHc19Gmb7zxWXWLL3pKEdqVMCHyVQ00XH7POBCZ
 
-# Stripe Webhook Secret (Optional - for production)
-# Get this from Stripe Dashboard > Developers > Webhooks > Your endpoint > Signing secret
-STRIPE_WEBHOOK_SECRET=whsec_xxx
-
-# MongoDB Connection
-MONGO_URI=mongodb://localhost:27017/carwash-pro
-
-# JWT Configuration (if not already set)
-JWT_SECRET=your_jwt_secret_key
-JWT_EXPIRE=24h
-JWT_REFRESH_SECRET=your_jwt_refresh_secret_key
-JWT_REFRESH_EXPIRE=7d
+# Server Configuration
+PORT=3000
+NODE_ENV=development
 ```
 
 ## Important Notes
 
-1. **TEST MODE ONLY**: The provided keys are Stripe TEST keys. Never use these in production.
+- **Never commit `.env` file to Git** - it contains sensitive keys
+- The `.env.example` file has been created as a template
+- Restart your backend server after adding the Stripe key
+- Use test keys (`sk_test_...`) for development
+- Use live keys (`sk_live_...`) for production
 
-2. **Secret Key Security**: 
-   - The `STRIPE_SECRET_KEY` must NEVER be exposed to the Flutter app
-   - Only the `STRIPE_PUBLISHABLE_KEY` should be sent to the Flutter app
-   - Store secret keys securely in environment variables
+## Verification
 
-3. **Webhook Secret**:
-   - Required for production to verify webhook signatures
-   - Optional for development/testing
-   - Get from Stripe Dashboard after setting up webhook endpoint
+After adding the key, restart your server. You should see:
+```
+✅ Stripe initialized successfully
+```
 
-4. **Production Setup**:
-   - Replace test keys with live keys from Stripe Dashboard
-   - Set up webhook endpoint in Stripe Dashboard
-   - Configure `STRIPE_WEBHOOK_SECRET` from webhook settings
+If you see an error, check:
+1. The key is correctly added to `.env`
+2. No extra spaces or quotes around the key
+3. The server was restarted after adding the key
 
-## Stripe Dashboard Setup
-
-1. Go to [Stripe Dashboard](https://dashboard.stripe.com/)
-2. Navigate to **Developers > API keys**
-3. Copy your **Publishable key** and **Secret key**
-4. For webhooks:
-   - Go to **Developers > Webhooks**
-   - Click **Add endpoint**
-   - Enter your webhook URL: `https://yourdomain.com/api/v1/stripe/webhook`
-   - Select events: `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`
-   - Copy the **Signing secret** to `STRIPE_WEBHOOK_SECRET`
-
-## Testing
-
-Use Stripe test cards for testing:
-- **Success**: `4242 4242 4242 4242`
-- **3D Secure**: `4000 0025 0000 3155`
-- **Declined**: `4000 0000 0000 0002`
-
-See [Stripe Test Cards](https://stripe.com/docs/testing#cards) for more options.
