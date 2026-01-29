@@ -1,7 +1,7 @@
 
 import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -23,6 +23,7 @@ import 'features/auth/services/auth_service.dart';
 import 'features/notifications/services/notification_handler_service.dart';
 import 'features/notifications/controllers/notification_controller.dart';
 import 'util/constants.dart';
+import 'config/env_config.dart';
 // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 // import 'features/bookings/services/draft_booking_service.dart';
 
@@ -38,59 +39,71 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Load environment variables from .env file
+  await EnvConfig.initialize();
+  
   // Initialize Firebase before running the app (skip on web)
   if (!kIsWeb) {
     try {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-      print('✅ Firebase initialized successfully');
+      debugPrint('✅ Firebase initialized successfully');
       
       // Set up background message handler (only on mobile)
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       
     } catch (e) {
-      print('❌ Firebase initialization error: $e');
+      debugPrint('❌ Firebase initialization error: $e');
       // Continue app execution even if Firebase fails (fallback will handle it)
     }
   } else {
-    print('ℹ️ Firebase initialization skipped on web platform');
+    debugPrint('ℹ️ Firebase initialization skipped on web platform');
   }
 
   // Initialize Stripe (skip on web - Stripe Payment Sheet doesn't work on web)
   if (!kIsWeb) {
     try {
-      final stripeKey = AppConstants.stripePublishableKey;
-      if (stripeKey.isNotEmpty && stripeKey != 'pk_test_your_publishable_key_here') {
-        // Set publishable key directly
+      // Validate Stripe configuration
+      if (!AppConstants.validateStripeConfig()) {
+        debugPrint('⚠️ Stripe publishable key not configured properly.');
+        debugPrint('   Please check your .env file and ensure STRIPE_PUBLISHABLE_KEY is set correctly.');
+        debugPrint('   The key must match your backend STRIPE_SECRET_KEY account.');
+        debugPrint('   Get keys from: https://dashboard.stripe.com/test/apikeys');
+      } else {
+        final stripeKey = AppConstants.stripePublishableKey;
+        
+        // Set publishable key
         Stripe.publishableKey = stripeKey;
         
         // Set Apple Pay merchant identifier if configured
         final merchantId = AppConstants.applePayMerchantIdentifier;
         if (merchantId.isNotEmpty) {
           Stripe.merchantIdentifier = merchantId;
-          print('✅ Apple Pay merchant identifier configured: $merchantId');
+          debugPrint('✅ Apple Pay merchant identifier configured: $merchantId');
         } else {
-          print('ℹ️ Apple Pay merchant identifier not configured (Apple Pay will be disabled)');
+          debugPrint('ℹ️ Apple Pay merchant identifier not configured (Apple Pay will be disabled)');
         }
         
         // Apply settings to initialize Stripe SDK
         await Stripe.instance.applySettings();
-        print('✅ Stripe initialized successfully with key: ${stripeKey.substring(0, 12)}...');
-      } else {
-        print('⚠️ Stripe publishable key not configured. Card payments will be disabled.');
-        print('   Please add your Stripe publishable key in util/constants.dart');
-        // Don't set an invalid key - leave it uninitialized
-        // CardField will check for this and show fallback UI
+        
+        // Log Stripe mode (test vs live)
+        final mode = AppConstants.isStripeTestMode ? 'TEST' : 'LIVE';
+        debugPrint('✅ Stripe initialized successfully');
+        debugPrint('   Mode: $mode');
+        debugPrint('   Key: ${stripeKey.substring(0, 12)}...');
+        debugPrint('   ⚠️ IMPORTANT: Ensure backend STRIPE_SECRET_KEY matches this account!');
       }
     } catch (e, stackTrace) {
-      print('❌ Stripe initialization error: $e');
-      print('Stack trace: $stackTrace');
-      // Don't set invalid key - CardField will handle gracefully
+      debugPrint('❌ Stripe initialization error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      debugPrint('⚠️ Please check your .env file and ensure STRIPE_PUBLISHABLE_KEY is correct');
+      // Don't set an invalid key - CardField will handle gracefully
       // Continue app execution even if Stripe fails
     }
   } else {
-    print('ℹ️ Stripe initialization skipped on web platform (not supported)');
+    debugPrint('ℹ️ Stripe initialization skipped on web platform (not supported)');
   }
   
   runApp(const MyApp());
@@ -186,7 +199,7 @@ class _MyAppState extends State<MyApp> {
         debugShowCheckedModeBanner: false,
         home: Scaffold(
           body: Center(
-            child: CircularProgressIndicator(),
+            child: const CircularProgressIndicator(),
           ),
         ),
       );

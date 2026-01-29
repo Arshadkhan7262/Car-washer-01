@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,8 +10,9 @@ import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
 import '../widgets/service_card_widget.dart';
 import '../widgets/custom_text_field.dart';
-import '../widgets/google_pay_dialog.dart';
-import '../widgets/apple_pay_dialog.dart';
+// Dialog imports removed - now using Stripe Payment Sheet for Google Pay and Apple Pay
+// import '../widgets/google_pay_dialog.dart';
+// import '../widgets/apple_pay_dialog.dart';
 import '../controllers/profile_controller.dart';
 import '../services/stripe_payment_service.dart';
 
@@ -535,9 +537,6 @@ class _BookScreenState extends State<BookScreen> {
                     },
                   ),
                   const SizedBox(height: 30),
-                  Text('Select Time', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness== Brightness.dark? DarkTheme.textPrimary:LightTheme.textPrimary , fontSize: 14, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  
                   // Saved Addresses Dropdown
                   Obx(() {
                     print('🔄 [BookScreen] Addresses dropdown rebuild - Count: ${controller.savedAddresses.length}, Loading: ${controller.isLoadingAddresses.value}');
@@ -669,8 +668,8 @@ class _BookScreenState extends State<BookScreen> {
                   }),
                   
                   const SizedBox(height: 20),
-                  Text('Select Vehicle Type', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness== Brightness.dark? DarkTheme.textPrimary:LightTheme.textPrimary , fontSize: 14, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
+                  // Text('Select Vehicle Type', style: GoogleFonts.inter(color: Theme.of(Get.context!).brightness== Brightness.dark? DarkTheme.textPrimary:LightTheme.textPrimary , fontSize: 14, fontWeight: FontWeight.bold)),
+                  // const SizedBox(height: 10),
                   
                   // Saved Vehicles Dropdown
                   Obx(() {
@@ -1121,17 +1120,17 @@ class _BookScreenState extends State<BookScreen> {
       // Process payment based on method
       Map<String, dynamic>? paymentResult;
       
-      if (selectedMethod == 'Credit Card') {
+      if (selectedMethod == 'Credit Card' || selectedMethod == 'Google Pay' || selectedMethod == 'Apple Pay') {
         // Don't show loading dialog - Payment Sheet will handle its own UI
-        print('🔄 [BookScreen] Starting credit card payment with Payment Sheet');
+        print('🔄 [BookScreen] Starting payment with Payment Sheet - Method: $selectedMethod');
         
         try {
-          // Use Stripe Payment Sheet for credit card payment
-          // This will show a bottom sheet with card entry fields
+          // Use Stripe Payment Sheet for all card-based payments (Credit Card, Google Pay, Apple Pay)
+          // This will show a bottom sheet with payment options
           paymentResult = await paymentService.presentPaymentSheet(
             amount: amount,
             currency: 'USD',
-            preferredPaymentMethod: 'Credit Card',
+            preferredPaymentMethod: selectedMethod, // Pass the selected method
           );
           
           print('✅ [BookScreen] Payment Sheet completed successfully');
@@ -1145,34 +1144,6 @@ class _BookScreenState extends State<BookScreen> {
           // Re-throw other errors to be caught by outer catch block
           rethrow;
         }
-        
-      } else if (selectedMethod == 'Google Pay') {
-        // Show custom Google Pay dialog with button
-        print('🔄 [BookScreen] Starting Google Pay payment');
-        
-        paymentResult = await _showGooglePayDialog(context, amount, paymentService);
-        print('🔄 [BookScreen] Google Pay result: $paymentResult');
-        
-        if (paymentResult == null) {
-          print('⚠️ [BookScreen] Google Pay was cancelled or failed');
-          return; // User cancelled or payment failed
-        }
-        
-        print('✅ [BookScreen] Google Pay payment completed');
-        
-      } else if (selectedMethod == 'Apple Pay') {
-        // Show custom Apple Pay dialog with button
-        print('🔄 [BookScreen] Starting Apple Pay payment');
-        
-        paymentResult = await _showApplePayDialog(context, amount, paymentService);
-        print('🔄 [BookScreen] Apple Pay result: $paymentResult');
-        
-        if (paymentResult == null) {
-          print('⚠️ [BookScreen] Apple Pay was cancelled or failed');
-          return; // User cancelled or payment failed
-        }
-        
-        print('✅ [BookScreen] Apple Pay payment completed');
         
       } else if (selectedMethod == 'Wallet') {
         // Show loading
@@ -1254,12 +1225,18 @@ class _BookScreenState extends State<BookScreen> {
   // --- STAGE 4: PAYMENT SELECTION (NEW) ---
   Widget _buildPaymentStage(BookController controller) {
 
+    // Payment methods - platform specific
+    // Credit Card, Wallet, and Cash are available on both platforms
+    // Google Pay only on Android, Apple Pay only on iOS
     List<Map<String, dynamic>> paymentMethods = [
       {'name': 'Credit Card', 'details': '**** 4242', 'imagePath': 'assets/images/card.png', 'balance': null},
       {'name': 'Wallet', 'details': 'Balance: \$50.00', 'imagePath': 'assets/images/wallet.png', 'balance': '50.00'},
       {'name': 'Cash', 'details': 'Pay on completion', 'imagePath': 'assets/images/cash.png', 'balance': null},
-      {'name': 'Apple Pay', 'details': 'Fast & secure', 'imagePath': 'assets/images/apple.png', 'balance': null},
-      {'name': 'Google Pay', 'details': 'Fast & secure', 'imagePath': 'assets/images/googlepay.png', 'balance': null},
+      // Platform-specific payment methods
+      if (Platform.isIOS)
+        {'name': 'Apple Pay', 'details': 'Fast & secure', 'imagePath': 'assets/images/apple.png', 'balance': null},
+      if (Platform.isAndroid)
+        {'name': 'Google Pay', 'details': 'Fast & secure', 'imagePath': 'assets/images/googlepay.png', 'balance': null},
     ];
 
     Widget _buildPaymentCard(BookController controller, Map<String, dynamic> method) {
@@ -1630,6 +1607,8 @@ class _BookScreenState extends State<BookScreen> {
   }
 
   /// Show Google Pay dialog with custom button
+  /// NOTE: This method is no longer used - Google Pay now uses Stripe Payment Sheet
+  /*
   Future<Map<String, dynamic>?> _showGooglePayDialog(
     BuildContext context,
     double amount,
@@ -1688,8 +1667,11 @@ class _BookScreenState extends State<BookScreen> {
     
     return completer.future;
   }
+  */
 
   /// Show Apple Pay dialog with custom button
+  /// NOTE: This method is no longer used - Apple Pay now uses Stripe Payment Sheet
+  /*
   Future<Map<String, dynamic>?> _showApplePayDialog(
     BuildContext context,
     double amount,
@@ -1748,4 +1730,5 @@ class _BookScreenState extends State<BookScreen> {
     
     return completer.future;
   }
+  */
 }

@@ -1,45 +1,14 @@
-import 'dart:io';
+import '../config/env_config.dart';
 
 /// Application Constants
+/// Now uses .env file for configuration via EnvConfig
 class AppConstants {
-  // API Configuration
-  // IMPORTANT: Choose the correct URL based on your setup:
-  // 
-  // For Android Emulator: 'http://10.0.2.2:3000/api/v1'
-  //   (10.0.2.2 is a special IP that maps to host's localhost)
-  //
-  // For Physical Android Device: 'http://192.168.18.7:3000/api/v1'
-  //   (Use your computer's network IP address)
-  //
-  // For iOS Simulator: 'http://localhost:3000/api/v1'
-  //
-  // For Physical iOS Device: 'http://192.168.18.7:3000/api/v1'
-  //
-  // To switch: Change the value below and restart the app
+  // API Configuration - Now loaded from .env file
+  // Configure in .env file: API_BASE_URL
+  static String get baseUrl => EnvConfig.baseUrl;
   
-  // Set to true if using Android Emulator, false for physical device
-  static const bool isAndroidEmulator = false; // Change to true if using emulator
-  
-  static String get baseUrl {
-    if (Platform.isAndroid) {
-      if (isAndroidEmulator) {
-        // Android Emulator uses special IP to access host machine
-        return 'http://10.0.2.2:3000/api/v1';
-      } else {
-        // Physical Android device uses network IP
-        return 'http://192.168.18.7:3000/api/v1';
-      }
-    } else if (Platform.isIOS) {
-      // iOS Simulator can use localhost, physical device needs network IP
-      // You may need to detect if it's simulator or device
-      return 'http://192.168.18.7:3000/api/v1';
-    } else {
-      // Default to network IP
-      return 'http://192.168.18.7:3000/api/v1';
-    }
-  }
-  static const int connectionTimeout = 60000; // 60 seconds (increased for network issues)
-  static const int receiveTimeout = 60000; // 60 seconds (increased for network issues)
+  static int get connectionTimeout => EnvConfig.connectionTimeout;
+  static int get receiveTimeout => EnvConfig.receiveTimeout;
 
   // Storage Keys
   static const String keyThemeMode = 'theme_mode';
@@ -62,17 +31,23 @@ class AppConstants {
   static const int minPasswordLength = 6;
   static const int maxPasswordLength = 50;
 
-  // Stripe Configuration
-  // TODO: Replace with your Stripe publishable key
-  // Get it from: https://dashboard.stripe.com/apikeys
-  static const String stripePublishableKey = 'pk_test_51SrHGn3TRO6sevNJDFTQKVOjH4kwWqpEFMYYmZblh9UzM2fVGsHJVjEaEddB9L4JiaGBG1dYyTBhjN57sKXC8tjf00NWyusAes';
+  // Stripe Configuration - Now loaded from .env file
+  // Configure in .env file: STRIPE_PUBLISHABLE_KEY
+  // IMPORTANT: Must match your backend STRIPE_SECRET_KEY account
+  // Get from: https://dashboard.stripe.com/test/apikeys
+  static String get stripePublishableKey => EnvConfig.stripePublishableKey;
   
-  // Apple Pay Configuration
-  // TODO: Get your merchant identifier from Apple Developer account
-  // Follow this guide: https://support.stripe.com/questions/enable-apple-pay-on-your-stripe-account
+  // Apple Pay Configuration - Now loaded from .env file
+  // Configure in .env file: APPLE_PAY_MERCHANT_IDENTIFIER
   // Format: merchant.com.yourcompany.appname
-  // Replace with your actual merchant identifier from Apple Developer portal
-  static const String applePayMerchantIdentifier = 'merchant.com.washaway.app'; // Replace with your actual ID
+  static String get applePayMerchantIdentifier => EnvConfig.applePayMerchantIdentifier;
+  
+  /// Validate Stripe configuration
+  /// Returns true if Stripe keys are properly configured
+  static bool validateStripeConfig() => EnvConfig.validateStripeConfig();
+  
+  /// Check if using Stripe test mode
+  static bool get isStripeTestMode => EnvConfig.isStripeTestMode;
 }
 
 

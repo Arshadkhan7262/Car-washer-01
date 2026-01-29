@@ -420,7 +420,14 @@ class HomeScreen extends GetView<HomeController> {
                       ),
                       const SizedBox(height: 15),
                       ElevatedButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const BookScreen(),
+                            ),
+                          );
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xffffffff), // Purple
                           shape: RoundedRectangleBorder(

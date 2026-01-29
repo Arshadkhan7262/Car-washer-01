@@ -398,11 +398,20 @@ class AuthService {
             'status': 'active', // Customers are always active
           };
         }
+        
+        // If token is invalid (401/403), clear it and logout
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          log('🔒 [checkUserStatus] Token is invalid (${response.statusCode}), clearing auth data...');
+          await logout();
+          log('⚠️ [checkUserStatus] Invalid token cleared, user must login again');
+          return null;
+        }
       }
       
-      // Fallback: Check status by email (public endpoint)
+      // Fallback: Check status by email (public endpoint) - only if no token or token is valid but endpoint failed
       final email = await getUserEmail();
-      if (email != null) {
+      if (email != null && token == null) {
+        // Only use email fallback if we don't have a token (not logged in)
         try {
           final response = await _apiClient.post(
             '/customer/auth/check-status',

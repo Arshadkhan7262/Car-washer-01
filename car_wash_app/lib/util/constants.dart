@@ -1,8 +1,10 @@
 /// Application Constants
 class AppConstants {
-  // API Configuration
+  // API Configuration - use the IP of the machine where the backend runs.
+  // When backend starts it logs "Network API URL: http://YOUR_IP:3000/api/v1" - use that.
+  // For Android emulator use: http://10.0.2.2:3000/api/v1
   static const String baseUrl =
-      'http://192.168.18.31:3000/api/v1'; // Backend API URL
+      'http://192.168.18.7:3000/api/v1'; // Backend API URL (same PC as wash_away backend)
   static const int connectionTimeout = 30000; // 30 seconds
   static const int receiveTimeout = 30000; // 30 seconds
 

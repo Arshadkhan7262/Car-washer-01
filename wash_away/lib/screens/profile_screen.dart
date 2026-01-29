@@ -429,14 +429,29 @@ class ProfileScreen extends GetView<ProfileController> {
                       imagePath: 'assets/images/wallet.png',
                       onTap: () async {
                         try {
-                          // Navigate to Add Funds screen
                           debugPrint('Add Funds to Wallet tapped');
-                          final result = await Navigator.push(
-                            context,
+                          
+                          // Ensure any open dialogs are closed first
+                          if (Get.isDialogOpen ?? false) {
+                            Get.back();
+                            await Future.delayed(const Duration(milliseconds: 200));
+                          }
+                          
+                          debugPrint('Navigating to Add Funds screen...');
+                          
+                          // Navigate to Add Funds screen, passing the existing controller
+                          final result = await Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => const AddFundsScreen(),
+                              builder: (context) {
+                                debugPrint('Building AddFundsScreen widget...');
+                                return AddFundsScreen(
+                                  profileController: controller, // Pass existing controller
+                                );
+                              },
                             ),
                           );
+                          
+                          debugPrint('Returned from Add Funds screen, result: $result');
                           
                           // Refresh wallet balance if funds were added
                           if (result != null && result['success'] == true) {
@@ -450,7 +465,7 @@ class ProfileScreen extends GetView<ProfileController> {
                             );
                           }
                         } catch (e, stackTrace) {
-                          debugPrint('Error navigating to Add Funds: $e');
+                          debugPrint('❌ Error navigating to Add Funds: $e');
                           debugPrint('Stack trace: $stackTrace');
                           Get.snackbar(
                             'Error',

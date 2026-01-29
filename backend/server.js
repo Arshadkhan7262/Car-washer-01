@@ -7,9 +7,10 @@ import { fileURLToPath } from 'url';
 import connectDatabase from './src/config/database.config.js';
 import errorHandler from './src/errors/errorHandler.js';
 import routes from './src/routes/index.routes.js';
+import getStripeInstance from './src/config/stripe.config.js';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from backend/.env (same dir as server.js)
+dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.env') });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -138,6 +139,12 @@ const startServer = async () => {
       console.log(`🌐 Network API URL: http://${localIP}:${PORT}/api/v1`);
       console.log(`\n💡 Use the Network API URL to access from other devices on the same network`);
       console.log(`⚠️ Note: MongoDB connection may still be in progress...`);
+      // Load Stripe so backend/.env key is used and logged (fix "No such payment_intent" key mismatch)
+      try {
+        getStripeInstance();
+      } catch (e) {
+        console.warn('⚠️ Stripe not configured:', e.message);
+      }
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

@@ -1,4 +1,4 @@
-import getStripeInstance from '../config/stripe.config.js';
+import getStripeInstance, { getStripeAccountIdPrefix } from '../config/stripe.config.js';
 import AppError from '../errors/AppError.js';
 
 /**
@@ -55,13 +55,16 @@ export const createPaymentIntent = async (params) => {
       amount: paymentIntent.amount,
     });
     
-    return {
+    const result = {
       client_secret: paymentIntent.client_secret,
       payment_intent_id: paymentIntent.id,
       amount: paymentIntent.amount / 100, // Convert back to dollars
       currency: paymentIntent.currency,
       status: paymentIntent.status,
+      // So app can show which Stripe account backend used (fix "No such payment_intent" key mismatch)
+      _stripe_account: getStripeAccountIdPrefix(),
     };
+    return result;
   } catch (error) {
     console.error('❌ [Payment Service] Error creating payment intent:', error);
     

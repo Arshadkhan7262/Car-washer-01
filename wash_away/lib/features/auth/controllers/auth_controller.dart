@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../../notifications/controllers/fcm_token_controller.dart';
+import '../../../api/api_checker.dart';
 
   /// Authentication Controller
   /// Manages Customer Authentication flow via Backend API
@@ -332,6 +333,22 @@ class AuthController extends GetxController {
 
       log('🔐 Starting Firebase Google Sign-In (Android-only)...');
 
+      // Check internet connectivity before attempting sign-in
+      final hasConnection = await ApiChecker.hasConnection();
+      if (!hasConnection) {
+        isLoading.value = false;
+        isLoggingIn.value = false;
+        errorMessage.value = 'No internet connection. Please check your network and try again.';
+        Get.snackbar(
+          'No Internet',
+          'Please check your internet connection and try again.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.orange.shade100,
+          colorText: Colors.orange.shade900,
+        );
+        return false;
+      }
+
       final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
 
       // Sign out any existing Firebase session
@@ -467,7 +484,7 @@ class AuthController extends GetxController {
       String errorMsg = 'Google Sign-In failed';
       
       if (e.code == 'sign_in_failed') {
-        // Parse error code from message (e.g., "ApiException: 12500" or "ApiException: 10")
+        // Parse error code from message (e.g., "ApiException: 12500" or "ApiException: 7")
         String? errorCodeStr;
         if (e.message != null && e.message!.contains('ApiException:')) {
           try {
@@ -476,7 +493,17 @@ class AuthController extends GetxController {
           } catch (_) {}
         }
         
-        if (errorCodeStr == '12500' || errorCodeStr == '10') {
+        // Handle specific error codes
+        if (errorCodeStr == '7') {
+          // Error code 7 = NETWORK_ERROR
+          errorMsg = 'Network Error (Code 7)\n\n'
+              'Unable to connect to Google services. Please try:\n'
+              '1. Check your internet connection\n'
+              '2. Ensure Google Play Services is updated\n'
+              '3. Restart the app and try again\n'
+              '4. Check if firewall/proxy is blocking Google services\n'
+              '5. Try again in a few moments (Google services may be temporarily unavailable)';
+        } else if (errorCodeStr == '12500' || errorCodeStr == '10') {
           // Error codes 10 and 12500 = DEVELOPER_ERROR
           // Usually means SHA-1 fingerprint not added or google-services.json not updated
           errorMsg = 'Google Sign-In configuration error (Error $errorCodeStr).\n\n'
@@ -487,8 +514,23 @@ class AuthController extends GetxController {
               '4. Replace: wash_away/android/app/google-services.json\n'
               '5. Rebuild: flutter clean && flutter pub get && flutter run\n\n'
               'Note: OAuth client is auto-created by Firebase - no manual OAuth setup needed!';
+        } else if (errorCodeStr == '8') {
+          // Error code 8 = INTERNAL_ERROR
+          errorMsg = 'Internal Error (Code 8)\n\n'
+              'An internal error occurred. Please try:\n'
+              '1. Restart the app\n'
+              '2. Update Google Play Services\n'
+              '3. Clear app cache and try again';
+        } else if (errorCodeStr == '6') {
+          // Error code 6 = DEVELOPER_ERROR (different from 10/12500)
+          errorMsg = 'Configuration Error (Code 6)\n\n'
+              'Please verify in Firebase Console:\n'
+              '1. Package name: com.example.wash_away\n'
+              '2. SHA-1 fingerprint is added\n'
+              '3. Android OAuth Client is configured\n'
+              '4. google-services.json is up to date';
         } else {
-          errorMsg = 'Google Sign-In configuration error.\n\n'
+          errorMsg = 'Google Sign-In error (Code ${errorCodeStr ?? "unknown"}).\n\n'
               'Please verify in Firebase Console:\n'
               '1. Package name: com.example.wash_away\n'
               '2. SHA-1 fingerprint is added\n'
@@ -499,6 +541,15 @@ class AuthController extends GetxController {
         log('   Error Code: ${errorCodeStr ?? "unknown"}');
         log('   Message: ${e.message}');
         log('   Details: ${e.details}');
+      } else if (e.code == 'network_error') {
+        // Direct network error (not wrapped in sign_in_failed)
+        errorMsg = 'Network Error\n\n'
+            'Unable to connect to Google services. Please try:\n'
+            '1. Check your internet connection\n'
+            '2. Ensure Google Play Services is updated\n'
+            '3. Restart the app and try again\n'
+            '4. Check if firewall/proxy is blocking Google services';
+        log('❌ Google Sign-In Network Error: ${e.message}');
       } else {
         errorMsg = 'Google Sign-In error: ${e.message ?? e.toString()}';
         log('❌ Google Sign-In Platform Error: ${e.code}');
