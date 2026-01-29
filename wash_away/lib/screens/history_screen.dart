@@ -12,13 +12,38 @@ import '../widgets/custom_text_field.dart';
 import 'track_order_screen.dart';
 import 'completed_booking_screen.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
   @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  // Initialize and inject the controller instance
+  final HistoryController controller = Get.put(HistoryController());
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    // Listen to search controller changes and update search query immediately
+    // This ensures search starts on the first keystroke
+    _searchController.addListener(() {
+      // Update immediately on every character change
+      controller.updateSearchQuery(_searchController.text);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Initialize and inject the controller instance
-    final HistoryController controller = Get.put(HistoryController());
 
     return Scaffold(
       // Light background color matching the image
@@ -71,12 +96,15 @@ class HistoryScreen extends StatelessWidget {
                   );
                 }
 
+                // Use the reactive filteredBookings list
                 final bookings = controller.filteredBookings;
 
                 if (bookings.isEmpty) {
                   return Center(
                     child: Text(
-                      "No bookings for this tab.",
+                      controller.searchQuery.value.isNotEmpty
+                          ? "No bookings found matching your search."
+                          : "No bookings for this tab.",
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   );
@@ -104,13 +132,22 @@ class HistoryScreen extends StatelessWidget {
   // --- WIDGET BUILDERS ---
 
   Widget _buildSearchBar() {
-    return CustomTextField(
-      controller: TextEditingController(), // Add a controller if needed for search functionality
-      hintText: 'Search bookings...',
+    return Obx(() => CustomTextField(
+      controller: _searchController,
+      hintText: 'Search by service, location, vehicle...',
       prefixIcon: Icons.search,
+      suffixIcon: controller.searchQuery.value.trim().isNotEmpty
+          ? Icons.clear
+          : null,
+      onSuffixIconTap: controller.searchQuery.value.trim().isNotEmpty
+          ? () {
+              _searchController.clear();
+              controller.clearSearch();
+            }
+          : null,
       borderRadius: 12,
       contentPadding: const EdgeInsets.symmetric(vertical: 16),
-    );
+    ));
   }
 
   Widget _buildTabBar(HistoryController controller) {

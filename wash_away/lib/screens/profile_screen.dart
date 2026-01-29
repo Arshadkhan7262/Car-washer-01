@@ -6,6 +6,7 @@ import 'package:wash_away/screens/help_and_support.dart';
 import 'package:wash_away/screens/my_vehicles_screen.dart';
 import 'package:wash_away/screens/notification_screen.dart';
 import 'package:wash_away/screens/payment_methods.dart';
+import 'package:wash_away/screens/add_funds_screen.dart';
 import '../controllers/profile_controller.dart';
 import '../controllers/theme_controller.dart';
 import '../themes/dark_theme.dart';
@@ -47,6 +48,7 @@ class ProfileScreen extends GetView<ProfileController> {
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
+            textAlign: TextAlign.center,
           ),
           if (subtitleWidget != null) ...[
             const SizedBox(height: 6),
@@ -412,6 +414,52 @@ class ProfileScreen extends GetView<ProfileController> {
                         // Action for Payment Methods
                         debugPrint('Payment Methods tapped');
                         Navigator.push(context, MaterialPageRoute(builder: (context)=> PaymentMethods()));
+                      },
+                    ),
+                    Divider(
+                      color: Theme.of(context).brightness == Brightness.dark 
+                          ? Colors.white.withValues(alpha: 0.1) 
+                          : Colors.black.withValues(alpha: 0.1), 
+                      height: 0, 
+                      thickness: 1
+                    ),
+                    // Add Funds to Wallet
+                    _buildSettingTile(
+                      title: 'Add Funds to Wallet',
+                      imagePath: 'assets/images/wallet.png',
+                      onTap: () async {
+                        try {
+                          // Navigate to Add Funds screen
+                          debugPrint('Add Funds to Wallet tapped');
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AddFundsScreen(),
+                            ),
+                          );
+                          
+                          // Refresh wallet balance if funds were added
+                          if (result != null && result['success'] == true) {
+                            await controller.fetchProfile();
+                            Get.snackbar(
+                              'Success',
+                              'Funds added successfully',
+                              snackPosition: SnackPosition.BOTTOM,
+                              backgroundColor: Colors.green,
+                              colorText: Colors.white,
+                            );
+                          }
+                        } catch (e, stackTrace) {
+                          debugPrint('Error navigating to Add Funds: $e');
+                          debugPrint('Stack trace: $stackTrace');
+                          Get.snackbar(
+                            'Error',
+                            'Failed to open Add Funds screen: ${e.toString()}',
+                            snackPosition: SnackPosition.BOTTOM,
+                            backgroundColor: Colors.red,
+                            colorText: Colors.white,
+                          );
+                        }
                       },
                     ),
                     Divider(

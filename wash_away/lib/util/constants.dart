@@ -38,8 +38,8 @@ class AppConstants {
       return 'http://192.168.18.7:3000/api/v1';
     }
   }
-  static const int connectionTimeout = 30000; // 30 seconds
-  static const int receiveTimeout = 30000; // 30 seconds
+  static const int connectionTimeout = 60000; // 60 seconds (increased for network issues)
+  static const int receiveTimeout = 60000; // 60 seconds (increased for network issues)
 
   // Storage Keys
   static const String keyThemeMode = 'theme_mode';
@@ -71,8 +71,8 @@ class AppConstants {
   // TODO: Get your merchant identifier from Apple Developer account
   // Follow this guide: https://support.stripe.com/questions/enable-apple-pay-on-your-stripe-account
   // Format: merchant.com.yourcompany.appname
-  // Leave empty if Apple Pay is not configured yet
-  static const String applePayMerchantIdentifier = ''; // e.g., 'merchant.com.washaway.app'
+  // Replace with your actual merchant identifier from Apple Developer portal
+  static const String applePayMerchantIdentifier = 'merchant.com.washaway.app'; // Replace with your actual ID
 }
 
 

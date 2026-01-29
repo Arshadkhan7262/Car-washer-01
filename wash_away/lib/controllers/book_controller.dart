@@ -7,6 +7,7 @@ import '../models/vehicle_type_model.dart';
 import '../models/address_model.dart';
 import '../models/add_vehicle_model.dart';
 import '../screens/booking_confirm_screen.dart';
+import '../screens/track_order_screen.dart';
 import '../features/services/services/service_service.dart';
 import '../features/vehicles/services/vehicle_type_service.dart';
 // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
@@ -564,20 +565,77 @@ class BookController extends GetxController {
     selectedVehicleType.refresh();
   }
 
-  /// Get subtotal (base price)
+  /// Map vehicle type name to backend enum value
+  /// Backend enum values: ['sedan', 'suv', 'truck', 'van', 'motorcycle', 'luxury']
+  String _mapVehicleTypeToEnum(String? vehicleTypeName) {
+    if (vehicleTypeName == null) return 'sedan';
+    
+    final normalized = vehicleTypeName.toLowerCase().trim();
+    
+    // Direct enum values
+    const enumValues = ['sedan', 'suv', 'truck', 'van', 'motorcycle', 'luxury'];
+    if (enumValues.contains(normalized)) {
+      return normalized;
+    }
+    
+    // Mapping for common variations
+    const mapping = {
+      'car': 'sedan',
+      'sedan': 'sedan',
+      'suv': 'suv',
+      'sport utility vehicle': 'suv',
+      'truck': 'truck',
+      'pickup': 'truck',
+      'pickup truck': 'truck',
+      'van': 'van',
+      'motorcycle': 'motorcycle',
+      'bike': 'motorcycle',
+      'luxury': 'luxury',
+    };
+    
+    return mapping[normalized] ?? 'sedan'; // Default to sedan if no match
+  }
+
+  /// Get subtotal (base price) - reactive to vehicle type changes
   double get subtotal {
-    if (selectedService.value != null) {
+    // Access selectedService and selectedVehicleType to make this reactive
+    final service = selectedService.value;
+    final vehicleType = selectedVehicleType.value;
+    
+    if (service != null) {
       // Check if there's vehicle-specific pricing
-      final vehicleType = selectedVehicleType.value?.name.toLowerCase();
-      if (vehicleType != null && 
-          selectedService.value!.pricing != null && 
-          selectedService.value!.pricing!.containsKey(vehicleType)) {
-        final vehiclePrice = selectedService.value!.pricing![vehicleType];
-        if (vehiclePrice != null && vehiclePrice > 0) {
-          return vehiclePrice;
+      if (vehicleType != null && service.pricing != null && service.pricing!.isNotEmpty) {
+        // Map vehicle type to backend enum value
+        final enumValue = _mapVehicleTypeToEnum(vehicleType.name);
+        
+        // Check if pricing map contains this vehicle type (using enum value)
+        if (service.pricing!.containsKey(enumValue)) {
+          final vehiclePrice = service.pricing![enumValue];
+          if (vehiclePrice != null && vehiclePrice > 0) {
+            return vehiclePrice;
+          }
+        }
+        
+        // Also try with original name (in case pricing uses original name)
+        final vehicleTypeName = vehicleType.name.toLowerCase().trim();
+        if (service.pricing!.containsKey(vehicleTypeName)) {
+          final vehiclePrice = service.pricing![vehicleTypeName];
+          if (vehiclePrice != null && vehiclePrice > 0) {
+            return vehiclePrice;
+          }
+        }
+        
+        // Also try with display name (in case pricing uses display name)
+        final displayName = vehicleType.displayName.toLowerCase().trim();
+        if (service.pricing!.containsKey(displayName)) {
+          final vehiclePrice = service.pricing![displayName];
+          if (vehiclePrice != null && vehiclePrice > 0) {
+            return vehiclePrice;
+          }
         }
       }
-      return selectedService.value!.basePrice;
+      // Fallback to base price if no vehicle-specific pricing found
+      return service.basePrice;
     }
     return 0.0;
   }
@@ -845,13 +903,39 @@ class BookController extends GetxController {
 
       isCreatingBooking.value = false;
 
-      // Navigate to booking confirmation screen with booking data
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => BookingConfirmationScreen(bookingData: bookingData),
-        ),
-      );
+      // Get booking ID for navigation
+      final bookingId = bookingData['booking_id']?.toString() ?? 
+                       bookingData['booking']?['booking_id']?.toString() ?? 
+                       bookingData['_id']?.toString() ?? '';
+      
+      // Navigate directly to tracking screen after successful booking
+      if (bookingId.isNotEmpty) {
+        // Show success message
+        Get.snackbar(
+          'Booking Confirmed!',
+          'Your booking has been created successfully',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2),
+        );
+        
+        // Navigate directly to tracking screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TrackerOrderScreen(bookingId: bookingId),
+          ),
+        );
+      } else {
+        // Fallback: navigate to confirmation screen if booking ID not available
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BookingConfirmationScreen(bookingData: bookingData),
+          ),
+        );
+      }
     } catch (e) {
       isCreatingBooking.value = false;
       Get.snackbar(

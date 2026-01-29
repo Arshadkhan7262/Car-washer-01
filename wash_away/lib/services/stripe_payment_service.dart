@@ -201,7 +201,14 @@ class StripePaymentService {
       log('🔄 [presentPaymentSheet] Starting payment sheet flow');
       log('🔄 [presentPaymentSheet] Amount: $amount, Currency: $currency, Preferred Method: $preferredPaymentMethod');
       
-      // Create payment intent
+      // Ensure Stripe is properly initialized
+      final publishableKey = Stripe.publishableKey;
+      if (publishableKey.isEmpty) {
+        log('❌ [presentPaymentSheet] Stripe not initialized');
+        throw Exception('Stripe is not initialized. Please restart the app.');
+      }
+      
+      // Create payment intent first
       log('🔄 [presentPaymentSheet] Creating payment intent...');
       final intentData = await createPaymentIntent(
         amount: amount,
@@ -247,23 +254,45 @@ class StripePaymentService {
       }
 
       // Initialize payment sheet with proper configuration
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Wash Away',
-          // Enable card entry in Payment Sheet (always allow as fallback)
-          allowsDelayedPaymentMethods: true,
-          // Optional: Customize appearance
-          style: ThemeMode.system,
-          // Configure preferred payment methods
-          applePay: applePayConfig,
-          googlePay: googlePayConfig,
-        ),
-      );
+      // Note: We need to initialize the payment sheet every time before presenting
+      // This ensures a fresh state for each payment attempt
+      try {
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Wash Away',
+            // Enable card entry in Payment Sheet (always allow as fallback)
+            allowsDelayedPaymentMethods: true,
+            // Optional: Customize appearance
+            style: ThemeMode.system,
+            // Configure preferred payment methods
+            applePay: applePayConfig,
+            googlePay: googlePayConfig,
+          ),
+        );
+        log('✅ [presentPaymentSheet] Payment sheet initialized successfully');
+      } catch (initError) {
+        log('❌ [presentPaymentSheet] Failed to initialize payment sheet: $initError');
+        // If initialization fails, try to reinitialize after a short delay
+        await Future.delayed(const Duration(milliseconds: 500));
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Wash Away',
+            allowsDelayedPaymentMethods: true,
+            style: ThemeMode.system,
+            applePay: applePayConfig,
+            googlePay: googlePayConfig,
+          ),
+        );
+        log('✅ [presentPaymentSheet] Payment sheet reinitialized successfully');
+      }
 
       log('✅ [presentPaymentSheet] Payment sheet initialized, presenting...');
 
       // Present payment sheet (this will show bottom sheet with card entry)
+      // Add a small delay to ensure initialization is complete
+      await Future.delayed(const Duration(milliseconds: 300));
       await Stripe.instance.presentPaymentSheet();
 
       log('✅ [presentPaymentSheet] Payment sheet completed, checking status...');
@@ -422,6 +451,118 @@ class StripePaymentService {
     } catch (e) {
       log('❌ [processPayment] Error: $e');
       rethrow;
+    }
+  }
+
+  /// Process Google Pay payment (mock implementation with dummy data)
+  Future<Map<String, dynamic>> processGooglePay({
+    required double amount,
+    required String currency,
+  }) async {
+    try {
+      log('🔄 [processGooglePay] Starting Google Pay flow (mock)');
+      log('🔄 [processGooglePay] Amount: $amount, Currency: $currency');
+      
+      // Simulate Google Pay processing delay
+      await Future.delayed(const Duration(seconds: 2));
+      
+      // Mock payment success
+      final mockPaymentId = 'gp_${DateTime.now().millisecondsSinceEpoch}';
+      
+      log('✅ [processGooglePay] Mock payment successful: $mockPaymentId');
+      
+      // Create payment intent on backend (for consistency)
+      final intentData = await createPaymentIntent(
+        amount: amount,
+        currency: currency,
+      );
+      
+      // Notify backend of successful payment
+      final token = await _authService.getAuthToken();
+      if (token != null) {
+        _apiClient.setAuthToken(token);
+      }
+      
+      final response = await _apiClient.post(
+        '/customer/payment/confirm',
+        body: {
+          'payment_intent_id': intentData['payment_intent_id'],
+          'transaction_id': mockPaymentId,
+        },
+      );
+      
+      if (!response.success) {
+        log('⚠️ Google Pay succeeded but backend confirmation failed');
+      } else {
+        log('✅ [processGooglePay] Backend confirmed payment');
+      }
+      
+      return {
+        'success': true,
+        'payment_intent_id': intentData['payment_intent_id'],
+        'transaction_id': mockPaymentId,
+        'status': 'succeeded',
+        'method': 'google_pay',
+      };
+    } catch (e) {
+      log('❌ [processGooglePay] Error: $e');
+      throw Exception('Google Pay failed: ${e.toString()}');
+    }
+  }
+
+  /// Process Apple Pay payment (mock implementation with dummy data)
+  Future<Map<String, dynamic>> processApplePay({
+    required double amount,
+    required String currency,
+  }) async {
+    try {
+      log('🔄 [processApplePay] Starting Apple Pay flow (mock)');
+      log('🔄 [processApplePay] Amount: $amount, Currency: $currency');
+      
+      // Simulate Apple Pay processing delay
+      await Future.delayed(const Duration(seconds: 2));
+      
+      // Mock payment success
+      final mockPaymentId = 'ap_${DateTime.now().millisecondsSinceEpoch}';
+      
+      log('✅ [processApplePay] Mock payment successful: $mockPaymentId');
+      
+      // Create payment intent on backend (for consistency)
+      final intentData = await createPaymentIntent(
+        amount: amount,
+        currency: currency,
+      );
+      
+      // Notify backend of successful payment
+      final token = await _authService.getAuthToken();
+      if (token != null) {
+        _apiClient.setAuthToken(token);
+      }
+      
+      final response = await _apiClient.post(
+        '/customer/payment/confirm',
+        body: {
+          'payment_intent_id': intentData['payment_intent_id'],
+          'transaction_id': mockPaymentId,
+        },
+      );
+      
+      if (!response.success) {
+        log('⚠️ Apple Pay succeeded but backend confirmation failed');
+      } else {
+        log('✅ [processApplePay] Backend confirmed payment');
+      }
+      
+      return {
+        'success': true,
+        'payment_intent_id': intentData['payment_intent_id'],
+        'transaction_id': mockPaymentId,
+        'status': 'succeeded',
+        'method': 'apple_pay',
+      };
+    } catch (e) {
+      log('❌ [processApplePay] Error: $e');
+      throw Exception('Apple Pay failed: ${e.toString()}');
     }
   }
 }

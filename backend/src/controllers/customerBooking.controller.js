@@ -4,6 +4,8 @@ import * as washerLocationService from '../services/washerLocation.service.js';
 // import * as draftBookingService from '../services/draftBooking.service.js';
 import * as vehicleTypeService from '../services/vehicleType.service.js';
 import AppError from '../errors/AppError.js';
+import User from '../models/User.model.js';
+import Booking from '../models/Booking.model.js';
 
 /**
  * Map vehicle type name/display name to Booking enum value
@@ -116,7 +118,52 @@ export const createBooking = async (req, res, next) => {
       coupon_code: coupon_code || null
     };
 
+    // If payment method is wallet, check balance and deduct BEFORE creating booking
+    if (payment_method === 'wallet') {
+      const user = await User.findById(customerId);
+      if (!user) {
+        throw new AppError('User not found', 404);
+      }
+
+      // We need to calculate the total first to check wallet balance
+      // This is a simplified calculation - actual total will be calculated in booking service
+      // For now, we'll create booking and then deduct, rolling back if insufficient
+      // Note: In production, you might want to extract total calculation logic
+    }
+
+    // Create booking (this calculates total including coupons)
     const booking = await bookingService.createBooking(bookingData);
+
+    // If payment method is wallet, deduct from wallet balance AFTER booking creation
+    if (payment_method === 'wallet') {
+      const user = await User.findById(customerId);
+      if (!user) {
+        throw new AppError('User not found', 404);
+      }
+
+      const walletBalance = user.wallet_balance || 0;
+      const bookingTotal = booking.total || 0;
+
+      if (walletBalance < bookingTotal) {
+        // Rollback booking creation if wallet balance is insufficient
+        await Booking.findByIdAndDelete(booking._id);
+        throw new AppError(
+          `Insufficient wallet balance. Current balance: $${walletBalance.toFixed(2)}, Required: $${bookingTotal.toFixed(2)}`,
+          400
+        );
+      }
+
+      // Deduct from wallet
+      user.wallet_balance = walletBalance - bookingTotal;
+      await user.save();
+
+      console.log('✅ [Booking Controller] Wallet payment deducted:', {
+        bookingId: booking.booking_id,
+        amount: bookingTotal,
+        previousBalance: walletBalance,
+        newBalance: user.wallet_balance,
+      });
+    }
 
     // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
     // Delete draft booking after successful booking creation

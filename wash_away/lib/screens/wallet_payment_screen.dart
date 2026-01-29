@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
 import '../controllers/profile_controller.dart';
+import '../api/api_client.dart';
+import 'add_funds_screen.dart';
 
 class WalletPaymentScreen extends StatefulWidget {
   final double amount;
@@ -25,6 +27,7 @@ class WalletPaymentScreen extends StatefulWidget {
 
 class _WalletPaymentScreenState extends State<WalletPaymentScreen> {
   final ProfileController _profileController = Get.put(ProfileController());
+  final ApiClient _apiClient = ApiClient();
   bool _isProcessing = false;
 
   Future<void> _processWalletPayment() async {
@@ -46,20 +49,36 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen> {
       _isProcessing = true;
     });
 
-    // Simulate wallet payment processing
-    await Future.delayed(const Duration(seconds: 1));
-
     try {
-      // TODO: Integrate actual wallet payment API
-      // For now, this is a placeholder
-      
+      // Process wallet payment via API
+      final response = await _apiClient.post(
+        '/customer/payment/wallet',
+        body: {
+          'amount': widget.amount,
+          'currency': widget.currency,
+        },
+      );
+
+      if (!response.success) {
+        throw Exception(response.error ?? 'Wallet payment failed');
+      }
+
+      final responseData = response.data['data'] ?? {};
       final result = {
         'success': true,
         'payment_method': 'wallet',
-        'transaction_id': 'WLT_${DateTime.now().millisecondsSinceEpoch}',
+        'transaction_id': responseData['transaction_id'] ?? 
+                         'WLT_${DateTime.now().millisecondsSinceEpoch}',
         'status': 'succeeded',
         'amount': widget.amount,
+        'wallet_balance': responseData['wallet_balance'] ?? (walletBalance - widget.amount),
       };
+
+      // Update profile controller with new balance
+      if (responseData['wallet_balance'] != null) {
+        _profileController.walletBalance.value = 
+            (responseData['wallet_balance'] as num).toDouble();
+      }
 
       if (mounted) {
         Get.snackbar(
@@ -80,7 +99,7 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen> {
       if (mounted) {
         Get.snackbar(
           'Payment Failed',
-          e.toString(),
+          e.toString().replaceAll('Exception: ', ''),
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.red,
           colorText: Colors.white,
@@ -317,13 +336,25 @@ class _WalletPaymentScreenState extends State<WalletPaymentScreen> {
 
             // Add Funds Button
             TextButton(
-              onPressed: () {
-                // TODO: Navigate to add funds screen
-                Get.snackbar(
-                  'Add Funds',
-                  'Add funds feature coming soon',
-                  snackPosition: SnackPosition.BOTTOM,
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddFundsScreen(),
+                  ),
                 );
+                
+                if (result != null && result['success'] == true) {
+                  // Refresh wallet balance
+                  await _profileController.fetchProfile();
+                  Get.snackbar(
+                    'Success',
+                    'Funds added successfully',
+                    snackPosition: SnackPosition.BOTTOM,
+                    backgroundColor: Colors.green,
+                    colorText: Colors.white,
+                  );
+                }
               },
               child: Text(
                 'Add Funds to Wallet',

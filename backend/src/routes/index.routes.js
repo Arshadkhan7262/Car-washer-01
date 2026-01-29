@@ -62,6 +62,7 @@ import customerBookingRoutes from './customerBooking.routes.js';
 // import draftBookingRoutes from './draftBooking.routes.js';
 import customerAddressRoutes from './customerAddress.routes.js';
 import customerVehicleRoutes from './customerVehicle.routes.js';
+import customerWalletRoutes from './customerWallet.routes.js';
 router.use('/customer/profile', customerProfileRoutes); // Profile screen: profile data, stats, and preferences
 router.use('/customer/services', customerServiceRoutes); // Services: public endpoint for customers to view services
 router.use('/customer/vehicle-types', customerVehicleTypeRoutes); // Vehicle types: public endpoint for customers to view vehicle types
@@ -70,6 +71,7 @@ router.use('/customer/bookings', customerBookingRoutes); // Bookings: customer b
 // router.use('/customer/bookings/draft', draftBookingRoutes); // Draft bookings: save/load booking progress
 router.use('/customer/addresses', customerAddressRoutes); // Addresses: customer address management
 router.use('/customer/vehicles', customerVehicleRoutes); // Vehicles: customer vehicle management
+router.use('/customer/wallet', customerWalletRoutes); // Wallet: add funds to wallet
 import customerCouponRoutes from './customerCoupon.routes.js';
 router.use('/customer/coupons', customerCouponRoutes); // Coupons: customer coupon validation
 import customerNotificationRoutes from './customerNotification.routes.js';

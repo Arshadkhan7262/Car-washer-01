@@ -108,10 +108,13 @@ class ApiClient {
       
       // Provide more helpful error messages
       String errorMessage = e.toString();
+      final errorString = e.toString().toLowerCase();
       if (e is TimeoutException) {
         errorMessage = 'Connection timeout. Please ensure the backend server is running at ${AppConstants.baseUrl}';
-      } else if (e.toString().contains('Failed host lookup') || e.toString().contains('SocketException')) {
+      } else if (errorString.contains('failed host lookup') || errorString.contains('socketexception')) {
         errorMessage = 'Cannot connect to server. Please check your network connection and ensure the backend is running.';
+      } else if (errorString.contains('connection reset') || errorString.contains('clientexception')) {
+        errorMessage = 'Connection lost. The backend server may have stopped or restarted. Please ensure the server is running at ${AppConstants.baseUrl} and try again.';
       }
       
       return ApiResponse(success: false, error: errorMessage);
@@ -170,10 +173,13 @@ class ApiClient {
       
       // Provide more helpful error messages
       String errorMessage = e.toString();
+      final errorString = e.toString().toLowerCase();
       if (e is TimeoutException) {
         errorMessage = 'Connection timeout. Please ensure the backend server is running at ${AppConstants.baseUrl}';
-      } else if (e.toString().contains('Failed host lookup') || e.toString().contains('SocketException')) {
+      } else if (errorString.contains('failed host lookup') || errorString.contains('socketexception')) {
         errorMessage = 'Cannot connect to server. Please check your network connection and ensure the backend is running.';
+      } else if (errorString.contains('connection reset') || errorString.contains('clientexception')) {
+        errorMessage = 'Connection lost. The backend server may have stopped or restarted. Please ensure the server is running at ${AppConstants.baseUrl} and try again.';
       }
       
       return ApiResponse(success: false, error: errorMessage);
@@ -232,10 +238,13 @@ class ApiClient {
       
       // Provide more helpful error messages
       String errorMessage = e.toString();
+      final errorString = e.toString().toLowerCase();
       if (e is TimeoutException) {
         errorMessage = 'Connection timeout. Please ensure the backend server is running at ${AppConstants.baseUrl}';
-      } else if (e.toString().contains('Failed host lookup') || e.toString().contains('SocketException')) {
+      } else if (errorString.contains('failed host lookup') || errorString.contains('socketexception')) {
         errorMessage = 'Cannot connect to server. Please check your network connection and ensure the backend is running.';
+      } else if (errorString.contains('connection reset') || errorString.contains('clientexception')) {
+        errorMessage = 'Connection lost. The backend server may have stopped or restarted. Please ensure the server is running at ${AppConstants.baseUrl} and try again.';
       }
       
       return ApiResponse(success: false, error: errorMessage);
@@ -291,10 +300,13 @@ class ApiClient {
       
       // Provide more helpful error messages
       String errorMessage = e.toString();
+      final errorString = e.toString().toLowerCase();
       if (e is TimeoutException) {
         errorMessage = 'Connection timeout. Please ensure the backend server is running at ${AppConstants.baseUrl}';
-      } else if (e.toString().contains('Failed host lookup') || e.toString().contains('SocketException')) {
+      } else if (errorString.contains('failed host lookup') || errorString.contains('socketexception')) {
         errorMessage = 'Cannot connect to server. Please check your network connection and ensure the backend is running.';
+      } else if (errorString.contains('connection reset') || errorString.contains('clientexception')) {
+        errorMessage = 'Connection lost. The backend server may have stopped or restarted. Please ensure the server is running at ${AppConstants.baseUrl} and try again.';
       }
       
       return ApiResponse(success: false, error: errorMessage);

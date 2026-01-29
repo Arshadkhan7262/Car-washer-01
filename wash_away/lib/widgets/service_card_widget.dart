@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:get/get.dart';
 import 'package:wash_away/models/service_model.dart';
+import 'package:wash_away/controllers/book_controller.dart';
 
 import '../Helpers/endl_helper.dart';
 import '../themes/dark_theme.dart';
@@ -127,14 +129,86 @@ class _ServiceCardWidgetState extends State<ServiceCardWidget> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    widget.service.price,
-                    style: GoogleFonts.inter(
-                      color: Theme.of(context).textTheme.titleMedium!.color,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  // Show price based on selected vehicle type if available, otherwise show base price or range
+                  Obx(() {
+                    // Try to get BookController if available (for booking screen)
+                    try {
+                      final bookController = Get.find<BookController>();
+                      final selectedVehicleType = bookController.selectedVehicleType.value;
+                      
+                      // If vehicle type is selected and service has pricing for it, show that price
+                      if (selectedVehicleType != null && widget.service.pricing != null && widget.service.pricing!.isNotEmpty) {
+                        // Map vehicle type to enum value (same logic as in BookController)
+                        String mapVehicleTypeToEnum(String? vehicleTypeName) {
+                          if (vehicleTypeName == null) return 'sedan';
+                          final normalized = vehicleTypeName.toLowerCase().trim();
+                          const enumValues = ['sedan', 'suv', 'truck', 'van', 'motorcycle', 'luxury'];
+                          if (enumValues.contains(normalized)) return normalized;
+                          const mapping = {
+                            'car': 'sedan',
+                            'sedan': 'sedan',
+                            'suv': 'suv',
+                            'sport utility vehicle': 'suv',
+                            'truck': 'truck',
+                            'pickup': 'truck',
+                            'pickup truck': 'truck',
+                            'van': 'van',
+                            'motorcycle': 'motorcycle',
+                            'bike': 'motorcycle',
+                            'luxury': 'luxury',
+                          };
+                          return mapping[normalized] ?? 'sedan';
+                        }
+                        
+                        final enumValue = mapVehicleTypeToEnum(selectedVehicleType.name);
+                        if (widget.service.pricing!.containsKey(enumValue)) {
+                          final vehiclePrice = widget.service.pricing![enumValue];
+                          if (vehiclePrice != null && vehiclePrice > 0) {
+                            return Text(
+                              '\$${vehiclePrice.toStringAsFixed(0)}',
+                              style: GoogleFonts.inter(
+                                color: Theme.of(context).textTheme.titleMedium!.color,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            );
+                          }
+                        }
+                      }
+                    } catch (e) {
+                      // BookController not available (e.g., in home screen), use default price
+                    }
+                    
+                    // Show base price or price range if multiple vehicle prices exist
+                    if (widget.service.pricing != null && widget.service.pricing!.isNotEmpty) {
+                      final prices = widget.service.pricing!.values.where((p) => p > 0).toList();
+                      if (prices.isNotEmpty) {
+                        final minPrice = prices.reduce((a, b) => a < b ? a : b);
+                        final maxPrice = prices.reduce((a, b) => a > b ? a : b);
+                        if (minPrice != maxPrice) {
+                          // Show price range
+                          return Text(
+                            '\$${minPrice.toStringAsFixed(0)} - \$${maxPrice.toStringAsFixed(0)}',
+                            style: GoogleFonts.inter(
+                              color: Theme.of(context).textTheme.titleMedium!.color,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          );
+                        }
+                      }
+                    }
+                    
+                    // Default: show base price
+                    return Text(
+                      widget.service.price,
+                      style: GoogleFonts.inter(
+                        color: Theme.of(context).textTheme.titleMedium!.color,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    );
+                  }),
                   const SizedBox(width: 6),
                   Icon(
                     Icons.arrow_forward_ios,

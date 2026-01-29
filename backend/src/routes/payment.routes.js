@@ -39,5 +39,17 @@ router.get(
   paymentController.getPaymentIntent
 );
 
+/**
+ * @route   POST /api/v1/customer/payment/wallet
+ * @desc    Process payment from wallet balance
+ * @access  Private (requires authentication)
+ * @body    { amount: number, currency?: string, booking_id?: string }
+ */
+router.post(
+  '/wallet',
+  protectCustomer,
+  paymentController.processWalletPayment
+);
+
 export default router;
 

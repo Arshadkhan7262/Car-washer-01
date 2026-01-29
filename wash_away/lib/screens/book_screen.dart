@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +9,8 @@ import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
 import '../widgets/service_card_widget.dart';
 import '../widgets/custom_text_field.dart';
+import '../widgets/google_pay_dialog.dart';
+import '../widgets/apple_pay_dialog.dart';
 import '../controllers/profile_controller.dart';
 import '../services/stripe_payment_service.dart';
 
@@ -1122,30 +1125,54 @@ class _BookScreenState extends State<BookScreen> {
         // Don't show loading dialog - Payment Sheet will handle its own UI
         print('🔄 [BookScreen] Starting credit card payment with Payment Sheet');
         
-        // Use Stripe Payment Sheet for credit card payment
-        // This will show a bottom sheet with card entry fields
-        paymentResult = await paymentService.presentPaymentSheet(
-          amount: amount,
-          currency: 'USD',
-          preferredPaymentMethod: 'Credit Card',
-        );
+        try {
+          // Use Stripe Payment Sheet for credit card payment
+          // This will show a bottom sheet with card entry fields
+          paymentResult = await paymentService.presentPaymentSheet(
+            amount: amount,
+            currency: 'USD',
+            preferredPaymentMethod: 'Credit Card',
+          );
+          
+          print('✅ [BookScreen] Payment Sheet completed successfully');
+        } catch (paymentError) {
+          // Check if user cancelled
+          final errorString = paymentError.toString().toLowerCase();
+          if (errorString.contains('cancelled') || errorString.contains('canceled')) {
+            print('ℹ️ [BookScreen] User cancelled payment');
+            return; // User cancelled, don't show error
+          }
+          // Re-throw other errors to be caught by outer catch block
+          rethrow;
+        }
         
-        print('✅ [BookScreen] Payment Sheet completed successfully');
+      } else if (selectedMethod == 'Google Pay') {
+        // Show custom Google Pay dialog with button
+        print('🔄 [BookScreen] Starting Google Pay payment');
         
-      } else if (selectedMethod == 'Google Pay' || selectedMethod == 'Apple Pay') {
-        // Don't show loading dialog - Payment Sheet will handle its own UI
-        // The Payment Sheet will prioritize the selected payment method
-        print('🔄 [BookScreen] Starting ${selectedMethod} payment');
+        paymentResult = await _showGooglePayDialog(context, amount, paymentService);
+        print('🔄 [BookScreen] Google Pay result: $paymentResult');
         
-        // Use Stripe Payment Sheet with preferred payment method
-        // This will show the Payment Sheet with Google Pay/Apple Pay prioritized
-        paymentResult = await paymentService.presentPaymentSheet(
-          amount: amount,
-          currency: 'USD',
-          preferredPaymentMethod: selectedMethod, // Pass the selected method
-        );
+        if (paymentResult == null) {
+          print('⚠️ [BookScreen] Google Pay was cancelled or failed');
+          return; // User cancelled or payment failed
+        }
         
-        print('✅ [BookScreen] ${selectedMethod} payment completed');
+        print('✅ [BookScreen] Google Pay payment completed');
+        
+      } else if (selectedMethod == 'Apple Pay') {
+        // Show custom Apple Pay dialog with button
+        print('🔄 [BookScreen] Starting Apple Pay payment');
+        
+        paymentResult = await _showApplePayDialog(context, amount, paymentService);
+        print('🔄 [BookScreen] Apple Pay result: $paymentResult');
+        
+        if (paymentResult == null) {
+          print('⚠️ [BookScreen] Apple Pay was cancelled or failed');
+          return; // User cancelled or payment failed
+        }
+        
+        print('✅ [BookScreen] Apple Pay payment completed');
         
       } else if (selectedMethod == 'Wallet') {
         // Show loading
@@ -1184,8 +1211,16 @@ class _BookScreenState extends State<BookScreen> {
       // If payment succeeded (or cash/wallet), proceed with booking
       if (paymentResult != null && (paymentResult['success'] == true || selectedMethod == 'Cash')) {
         print('✅ [BookScreen] Payment successful, proceeding with booking');
+        print('🔄 [BookScreen] Payment result details: $paymentResult');
         await controller.confirmBooking(context);
       } else {
+        print('❌ [BookScreen] Payment result check failed');
+        print('   paymentResult: $paymentResult');
+        print('   paymentResult != null: ${paymentResult != null}');
+        if (paymentResult != null) {
+          print('   paymentResult[success]: ${paymentResult['success']}');
+          print('   selectedMethod: $selectedMethod');
+        }
         throw Exception('Payment processing failed');
       }
       
@@ -1592,5 +1627,125 @@ class _BookScreenState extends State<BookScreen> {
         ],
       ),
     );
+  }
+
+  /// Show Google Pay dialog with custom button
+  Future<Map<String, dynamic>?> _showGooglePayDialog(
+    BuildContext context,
+    double amount,
+    StripePaymentService paymentService,
+  ) async {
+    final completer = Completer<Map<String, dynamic>?>();
+    bool paymentInitiated = false;
+    
+    Get.dialog(
+      GooglePayDialog(
+        amount: amount,
+        currency: 'USD',
+        isLoading: false,
+        onPayPressed: () async {
+          paymentInitiated = true;
+          Get.back(); // Close dialog
+          
+          // Show loading
+          Get.dialog(
+            const Center(child: CircularProgressIndicator()),
+            barrierDismissible: false,
+          );
+          
+          try {
+            final result = await paymentService.processGooglePay(
+              amount: amount,
+              currency: 'USD',
+            );
+            Get.back(); // Close loading
+            
+            if (!completer.isCompleted) {
+              completer.complete(result);
+            }
+          } catch (e) {
+            Get.back(); // Close loading
+            Get.snackbar(
+              'Payment Failed',
+              e.toString().replaceAll('Exception: ', ''),
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red,
+              colorText: Colors.white,
+            );
+            if (!completer.isCompleted) {
+              completer.complete(null);
+            }
+          }
+        },
+      ),
+      barrierDismissible: true,
+    ).then((_) {
+      // If dialog is dismissed without payment being initiated, complete with null
+      if (!paymentInitiated && !completer.isCompleted) {
+        completer.complete(null);
+      }
+    });
+    
+    return completer.future;
+  }
+
+  /// Show Apple Pay dialog with custom button
+  Future<Map<String, dynamic>?> _showApplePayDialog(
+    BuildContext context,
+    double amount,
+    StripePaymentService paymentService,
+  ) async {
+    final completer = Completer<Map<String, dynamic>?>();
+    bool paymentInitiated = false;
+    
+    Get.dialog(
+      ApplePayDialog(
+        amount: amount,
+        currency: 'USD',
+        isLoading: false,
+        onPayPressed: () async {
+          paymentInitiated = true;
+          Get.back(); // Close dialog
+          
+          // Show loading
+          Get.dialog(
+            const Center(child: CircularProgressIndicator()),
+            barrierDismissible: false,
+          );
+          
+          try {
+            final result = await paymentService.processApplePay(
+              amount: amount,
+              currency: 'USD',
+            );
+            Get.back(); // Close loading
+            
+            if (!completer.isCompleted) {
+              completer.complete(result);
+            }
+          } catch (e) {
+            Get.back(); // Close loading
+            Get.snackbar(
+              'Payment Failed',
+              e.toString().replaceAll('Exception: ', ''),
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.red,
+              colorText: Colors.white,
+            );
+            if (!completer.isCompleted) {
+              completer.complete(null);
+            }
+          }
+        },
+      ),
+      barrierDismissible: true,
+    ).then((_) {
+      // If dialog is dismissed without payment being initiated, complete with null
+      if (!paymentInitiated && !completer.isCompleted) {
+        completer.complete(null);
+      }
+    });
+    
+    return completer.future;
   }
 }
