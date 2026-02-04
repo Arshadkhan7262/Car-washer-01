@@ -64,12 +64,7 @@ class HomeScreen extends GetView<HomeController> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Good afternoon',
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
-                            const SizedBox(height: 4),
-                             Text(
-                              'Hello, Muhammad 👋',
+                              'Muhammad',
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                           ],

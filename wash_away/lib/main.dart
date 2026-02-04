@@ -1,11 +1,14 @@
 
 import 'dart:developer';
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'features/auth/auth_binding.dart';
 import 'features/auth/screens/login_screen.dart';
@@ -13,27 +16,86 @@ import 'features/auth/screens/signup_screen.dart';
 import 'features/auth/screens/email_otp_screen.dart';
 import 'features/auth/screens/reset_password_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/initial_loading_screen.dart';
 // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 // import 'screens/resume_booking_screen.dart';
 import 'controllers/theme_controller.dart';
 
 import 'themes/dark_theme.dart';
 import 'themes/light_theme.dart';
-import 'features/auth/services/auth_service.dart';
 import 'features/notifications/services/notification_handler_service.dart';
 import 'features/notifications/controllers/notification_controller.dart';
+import 'features/notifications/controllers/fcm_token_controller.dart';
 import 'util/constants.dart';
 import 'config/env_config.dart';
 // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
 // import 'features/bookings/services/draft_booking_service.dart';
 
 // Background message handler (must be top-level function)
+// This runs when app is in background or terminated
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  log('📱 [Background] Received notification: ${message.messageId}');
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } catch (_) {}
+  log('📱 [Background] ==========================================');
+  log('📱 [Background] BACKGROUND NOTIFICATION RECEIVED');
+  log('📱 [Background] Message ID: ${message.messageId}');
   log('📱 [Background] Title: ${message.notification?.title}');
   log('📱 [Background] Body: ${message.notification?.body}');
   log('📱 [Background] Data: ${message.data}');
+  log('📱 [Background] ==========================================');
+
+  // Show notification in system tray when app is in background/terminated
+  try {
+    final title = message.notification?.title ?? message.data['title']?.toString() ?? 'Wash Away';
+    final body = message.notification?.body ?? message.data['body']?.toString() ?? 'You have a new notification';
+    if (Platform.isAndroid) {
+      final plugin = FlutterLocalNotificationsPlugin();
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const initSettings = InitializationSettings(android: androidSettings);
+      await plugin.initialize(initSettings);
+      const channel = AndroidNotificationChannel(
+        'high_importance_channel',
+        'High Importance Notifications',
+        description: 'This channel is used for important notifications.',
+        importance: Importance.high,
+        playSound: true,
+      );
+      await plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(channel);
+      const details = AndroidNotificationDetails(
+        'high_importance_channel',
+        'High Importance Notifications',
+        channelDescription: 'This channel is used for important notifications.',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        visibility: NotificationVisibility.public,
+      );
+      final bookingId = message.data['booking_id']?.toString() ?? '';
+      final screen = message.data['screen']?.toString() ?? 'track_order';
+      final id = DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
+      await plugin.show(id, title, body, NotificationDetails(android: details), payload: '$bookingId|$screen');
+      log('📱 [Background] Notification shown in tray: $title');
+    }
+  } catch (e) {
+    log('❌ [Background] Error showing notification: $e');
+  }
+
+  // Store navigation data for when app opens
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final bookingId = message.data['booking_id']?.toString();
+    if (bookingId != null && bookingId.isNotEmpty) {
+      await prefs.setString('pending_navigation_booking_id', bookingId);
+      await prefs.setString('pending_navigation_screen', message.data['screen']?.toString() ?? 'track_order');
+      log('📱 [Background] Stored navigation data for booking: $bookingId');
+    }
+  } catch (e) {
+    log('❌ [Background] Error storing navigation data: $e');
+  }
 }
 
 void main() async {
@@ -52,7 +114,23 @@ void main() async {
       
       // Set up background message handler (only on mobile)
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-      
+
+      // Request notification permission early so handler can show notifications when it inits
+      try {
+        final messaging = FirebaseMessaging.instance;
+        final settings = await messaging.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+        debugPrint('📱 [Notification] Permission at startup: ${settings.authorizationStatus}');
+        if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+            settings.authorizationStatus != AuthorizationStatus.provisional) {
+          debugPrint('📱 [Notification] Enable in Settings → Apps → Wash Away → Notifications, then restart app');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [Notification] Permission request failed: $e');
+      }
     } catch (e) {
       debugPrint('❌ Firebase initialization error: $e');
       // Continue app execution even if Firebase fails (fallback will handle it)
@@ -117,15 +195,13 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  String? initialRoute;
-  bool isLoading = true;
-
   @override
   void initState() {
     super.initState();
-    _checkAuthStatus();
-    // Initialize notification handlers after app starts
-    _initializeNotifications();
+    // Defer notification init until after first frame to avoid blocking UI and ANR/crash
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeNotifications();
+    });
   }
 
   Future<void> _initializeNotifications() async {
@@ -135,87 +211,54 @@ class _MyAppState extends State<MyApp> {
       return;
     }
     
-    // Wait a bit for GetX to be ready
-    await Future.delayed(const Duration(milliseconds: 500));
+    log('🔄 [MyApp] Starting notification initialization...');
+    
     try {
-      // Initialize notification controller first
-      Get.put(NotificationController());
-      // Then initialize the handler service
-      await NotificationHandlerService().initialize();
-    } catch (e) {
-      log('❌ Error initializing notifications: $e');
-    }
-  }
-
-  Future<void> _checkAuthStatus() async {
-    try {
-      final authService = AuthService();
-      final isLoggedIn = await authService.isLoggedIn();
+      await Future.delayed(const Duration(milliseconds: 100)); // yield to UI
+      log('🔄 [MyApp] Initializing NotificationController (permanent)...');
+      Get.put(NotificationController(), permanent: true);
+      log('✅ [MyApp] NotificationController initialized');
       
-      // If logged in, verify token is still valid by checking user status
-      if (isLoggedIn) {
-        final statusData = await authService.checkUserStatus();
-        if (statusData != null) {
-          // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
-          // Check if there's a draft booking
-          // final draftBookingService = DraftBookingService();
-          // final hasDraft = await draftBookingService.checkDraftExists();
-          
-          setState(() {
-            // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
-            // if (hasDraft) {
-            //   initialRoute = '/resume-booking';
-            // } else {
-            //   initialRoute = '/dashboard';
-            // }
-            initialRoute = '/dashboard';
-            isLoading = false;
-          });
-          return;
-        }
+      await Future.delayed(const Duration(milliseconds: 50)); // yield
+      log('🔄 [MyApp] Initializing FcmTokenController (permanent)...');
+      if (!Get.isRegistered<FcmTokenController>()) {
+        Get.put(FcmTokenController(), permanent: true);
       }
+      log('✅ [MyApp] FcmTokenController ready');
       
-      // Not logged in or token invalid
-      setState(() {
-        initialRoute = '/login';
-        isLoading = false;
-      });
-    } catch (e) {
-      // On error, default to login
-      setState(() {
-        initialRoute = '/login';
-        isLoading = false;
-      });
+      await Future.delayed(const Duration(milliseconds: 50)); // yield
+      log('🔄 [MyApp] Initializing NotificationHandlerService (foreground + tray)...');
+      await NotificationHandlerService().initialize();
+      log('✅ [MyApp] NotificationHandlerService initialized');
+      
+      await Future.delayed(const Duration(milliseconds: 300)); // yield before navigation check
+      log('🔄 [MyApp] Checking pending navigation...');
+      await NotificationHandlerService().checkPendingNavigation();
+      log('✅ [MyApp] Notification initialization completed');
+    } catch (e, stackTrace) {
+      log('❌ [MyApp] Error initializing notifications: $e');
+      log('❌ [MyApp] Stack trace: $stackTrace');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final themeController = Get.put(ThemeController());
-    
-    if (isLoading) {
-      return MaterialApp(
-        title: 'Wash Away',
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          body: Center(
-            child: const CircularProgressIndicator(),
-          ),
-        ),
-      );
-    }
-    
     return Obx(() => GetMaterialApp(
       title: 'Wash Away',
       debugShowCheckedModeBanner: false,
       theme: LightTheme.themeData,
       darkTheme: DarkTheme.themeData,
-      themeMode: themeController.isDarkMode.value 
-          ? ThemeMode.dark 
+      themeMode: themeController.isDarkMode.value
+          ? ThemeMode.dark
           : ThemeMode.light,
       initialBinding: AuthBinding(),
-      initialRoute: initialRoute ?? '/login',
+      initialRoute: '/',
       getPages: [
+        GetPage(
+          name: '/',
+          page: () => const InitialLoadingScreen(),
+        ),
         GetPage(
           name: '/login',
           page: () => const LoginScreen(),
@@ -237,11 +280,6 @@ class _MyAppState extends State<MyApp> {
           name: '/dashboard',
           page: () => const DashboardScreen(),
         ),
-        // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
-        // GetPage(
-        //   name: '/resume-booking',
-        //   page: () => const ResumeBookingScreen(),
-        // ),
       ],
     ));
   }

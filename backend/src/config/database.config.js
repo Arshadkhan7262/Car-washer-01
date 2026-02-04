@@ -7,6 +7,10 @@ const connectDatabase = async () => {
       throw new Error('MONGODB_URI is not defined in environment variables');
     }
 
+    // Configure Mongoose to fail fast if not connected (don't buffer operations)
+    mongoose.set('bufferCommands', false);
+    mongoose.set('bufferTimeoutMS', 0);
+
     // Connection options to handle DNS and network issues
     const connectionOptions = {
       serverSelectionTimeoutMS: 30000, // Timeout after 30s (increased for DNS resolution)
@@ -14,7 +18,6 @@ const connectDatabase = async () => {
       connectTimeoutMS: 30000, // Give up initial connection after 30s (increased for DNS)
       retryWrites: true,
       retryReads: true,
-      // Additional options for better connection handling
       maxPoolSize: 10,
       minPoolSize: 1,
     };

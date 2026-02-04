@@ -7,6 +7,7 @@ import Booking from '../models/Booking.model.js';
 import Washer from '../models/Washer.model.js';
 import AppError from '../errors/AppError.js';
 import mongoose from 'mongoose';
+import { sendNotificationToUser } from './notification.service.js';
 
 /**
  * Get all jobs for washer with filters
@@ -244,6 +245,39 @@ export const updateJobStatus = async (jobId, userId, newStatus, note = '') => {
     }
 
     await job.save();
+
+    // Send notification to customer about status change
+    try {
+      const statusMessages = {
+        'accepted': { title: 'Washer Accepted', body: 'Your washer has accepted the booking and is preparing', status: 'accepted' },
+        'on_the_way': { title: 'Washer On The Way', body: 'Your washer is on the way to your location', status: 'onTheWay' },
+        'arrived': { title: 'Washer Arrived', body: 'Your washer has arrived at your location', status: 'arrived' },
+        'in_progress': { title: 'Washing Started', body: 'Your car wash has started', status: 'washing' },
+        'completed': { title: 'Service Completed', body: 'Your car wash service has been completed', status: 'completed' },
+        'cancelled': { title: 'Booking Cancelled', body: 'Your booking has been cancelled by the washer', status: 'cancelled' },
+      };
+
+      const message = statusMessages[newStatus];
+      if (message) {
+        const bookingId = job.booking_id || job._id.toString();
+        await sendNotificationToUser(
+          job.customer_id.toString(),
+          message.title,
+          message.body,
+          {
+            type: 'booking_status',
+            booking_id: bookingId,
+            status: message.status,
+            screen: 'track_order', // Navigation screen
+            action: 'navigate', // Action to perform
+          }
+        );
+        console.log(`✅ Sent ${newStatus} notification to customer for booking ${bookingId}`);
+      }
+    } catch (notifError) {
+      // Don't fail the update if notification fails
+      console.error('❌ Failed to send status notification:', notifError.message);
+    }
 
     return job;
   } catch (error) {

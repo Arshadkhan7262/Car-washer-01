@@ -42,9 +42,29 @@ try {
   }
 
   console.log('✅ Firebase Admin SDK initialized successfully');
+  
+  // Get project ID from various sources
+  const projectId = firebaseApp.options.projectId || 
+                   (process.env.FIREBASE_SERVICE_ACCOUNT_KEY ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY).project_id : null) ||
+                   process.env.FIREBASE_PROJECT_ID ||
+                   'Not set';
+  
+  console.log(`📱 [Firebase] Project ID: ${projectId}`);
+  console.log(`📱 [Firebase] Service Account: ${process.env.FIREBASE_SERVICE_ACCOUNT_KEY ? 'Using JSON' : process.env.FIREBASE_CLIENT_EMAIL ? 'Using env vars' : 'Using default credentials'}`);
+  
+  // Verify messaging is available
+  try {
+    const messaging = admin.messaging();
+    console.log('✅ Firebase Cloud Messaging API is available');
+  } catch (messagingError) {
+    console.error('❌ Firebase Cloud Messaging API not available:', messagingError.message);
+  }
 } catch (error) {
   console.error('❌ Firebase Admin SDK initialization error:', error.message);
+  console.error('Stack:', error.stack);
   console.error('Please configure Firebase credentials in .env file');
+  console.error('Required: FIREBASE_SERVICE_ACCOUNT_KEY (JSON string) OR');
+  console.error('         FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY');
   throw error;
 }
 

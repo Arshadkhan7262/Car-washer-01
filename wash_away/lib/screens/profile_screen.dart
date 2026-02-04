@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:wash_away/screens/address_screen.dart';
 import 'package:wash_away/screens/help_and_support.dart';
+import 'package:wash_away/screens/privacy_policy_screen.dart';
 import 'package:wash_away/screens/my_vehicles_screen.dart';
 import 'package:wash_away/screens/notification_screen.dart';
 import 'package:wash_away/screens/payment_methods.dart';
@@ -356,7 +357,7 @@ class ProfileScreen extends GetView<ProfileController> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
       
-              // --- 3. Preferences/Settings Section ---
+              // --- Settings Section ---
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
                 decoration: BoxDecoration(
@@ -506,11 +507,26 @@ class ProfileScreen extends GetView<ProfileController> {
                     // Help & Support
                     _buildSettingTile(
                       title: 'Help & Support',
-                        imagePath: 'assets/images/question.png', // Matches the question mark in the image
+                      imagePath: 'assets/images/question.png',
                       onTap: () {
-                        // Action for Help & Support
                         debugPrint('Help & Support tapped');
                         Navigator.push(context, MaterialPageRoute(builder: (context)=> HelpAndSupport()));
+                      },
+                    ),
+                    Divider(
+                      color: Theme.of(context).brightness == Brightness.dark 
+                          ? Colors.white.withValues(alpha: 0.1) 
+                          : Colors.black.withValues(alpha: 0.1), 
+                      height: 0, 
+                      thickness: 1
+                    ),
+                    // Privacy Policy
+                    _buildSettingTile(
+                      title: 'Privacy Policy',
+                      imagePath: 'assets/images/authentication.png',
+                      onTap: () {
+                        debugPrint('Privacy Policy tapped');
+                        Navigator.push(context, MaterialPageRoute(builder: (context)=> const PrivacyPolicyScreen()));
                       },
                     ),
                   ],
@@ -634,6 +650,7 @@ class ProfileScreen extends GetView<ProfileController> {
       ),
     );
   }
+
   Widget _buildSignOutButton(ProfileController controller) {
     return Container(
       width: double.infinity,

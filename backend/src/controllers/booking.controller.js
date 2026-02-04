@@ -1,4 +1,7 @@
 import * as bookingService from '../services/booking.service.js';
+import { sendNotificationToUser } from '../services/notification.service.js';
+import Booking from '../models/Booking.model.js';
+import Washer from '../models/Washer.model.js';
 
 /**
  * @desc    Get all bookings with filters

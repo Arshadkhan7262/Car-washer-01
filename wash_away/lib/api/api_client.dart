@@ -145,6 +145,17 @@ class ApiClient {
       log('Request Body: $requestBody');
       log('───────────────────────────────────────────────────────────');
 
+      // Check backend health before making request (quick check)
+      try {
+        final baseUri = Uri.parse(AppConstants.baseUrl);
+        final healthCheckUrl = Uri.parse('${baseUri.scheme}://${baseUri.host}:${baseUri.port}/health');
+        await http.get(healthCheckUrl).timeout(const Duration(seconds: 3));
+        log('✅ Backend health check passed');
+      } catch (e) {
+        log('⚠️ Backend health check failed: $e');
+        // Continue anyway - health endpoint might not exist
+      }
+
       // Make request with timeout
       final response = await http
           .post(url, headers: requestHeaders, body: requestBody)
@@ -174,12 +185,31 @@ class ApiClient {
       // Provide more helpful error messages
       String errorMessage = e.toString();
       final errorString = e.toString().toLowerCase();
+      final baseUrl = AppConstants.baseUrl;
+      
       if (e is TimeoutException) {
-        errorMessage = 'Connection timeout. Please ensure the backend server is running at ${AppConstants.baseUrl}';
+        errorMessage = 'Connection timeout after ${AppConstants.connectionTimeout ~/ 1000} seconds.\n\n'
+            'The backend server at $baseUrl is not responding.\n\n'
+            'Please check:\n'
+            '1. Is the backend server running?\n'
+            '2. Is the IP address correct? (Current: ${Uri.parse(baseUrl).host})\n'
+            '3. Is the port correct? (Current: ${Uri.parse(baseUrl).port})\n'
+            '4. Are you on the same network?\n'
+            '5. Is the firewall blocking the connection?\n\n'
+            'To fix:\n'
+            '- Start your backend server\n'
+            '- Verify the IP address matches your backend server\n'
+            '- Check your .env file: API_BASE_URL=$baseUrl';
       } else if (errorString.contains('failed host lookup') || errorString.contains('socketexception')) {
-        errorMessage = 'Cannot connect to server. Please check your network connection and ensure the backend is running.';
+        errorMessage = 'Cannot connect to server at $baseUrl.\n\n'
+            'Please check:\n'
+            '1. Your network connection\n'
+            '2. The backend server is running\n'
+            '3. The IP address is correct\n'
+            '4. You are on the same network as the backend';
       } else if (errorString.contains('connection reset') || errorString.contains('clientexception')) {
-        errorMessage = 'Connection lost. The backend server may have stopped or restarted. Please ensure the server is running at ${AppConstants.baseUrl} and try again.';
+        errorMessage = 'Connection lost. The backend server may have stopped or restarted.\n\n'
+            'Please ensure the server is running at $baseUrl and try again.';
       }
       
       return ApiResponse(success: false, error: errorMessage);

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import * as notificationService from '../services/notification.service.js';
 import User from '../models/User.model.js';
 import Notification from '../models/Notification.model.js';
@@ -105,13 +106,122 @@ export const removeFcmToken = async (req, res) => {
 };
 
 /**
+ * Save or update FCM token for washer
+ * POST /api/v1/washer/notifications/fcm-token
+ */
+export const saveWasherFcmToken = async (req, res) => {
+  try {
+    const { token, device_type } = req.body;
+    const washerId = req.washer.id;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'FCM token is required'
+      });
+    }
+
+    // Find user
+    const user = await User.findById(washerId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if token already exists
+    const existingTokenIndex = user.fcm_tokens.findIndex(
+      t => t.token === token
+    );
+
+    if (existingTokenIndex >= 0) {
+      // Update existing token
+      user.fcm_tokens[existingTokenIndex].device_type = device_type || 'android';
+      user.fcm_tokens[existingTokenIndex].updated_at = new Date();
+    } else {
+      // Add new token
+      user.fcm_tokens.push({
+        token,
+        device_type: device_type || 'android',
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'FCM token saved successfully',
+      data: {
+        token_count: user.fcm_tokens.length
+      }
+    });
+  } catch (error) {
+    console.error('Error saving washer FCM token:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to save FCM token'
+    });
+  }
+};
+
+/**
+ * Remove FCM token for washer
+ * DELETE /api/v1/washer/notifications/fcm-token
+ */
+export const removeWasherFcmToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    const washerId = req.washer.id;
+
+    const user = await User.findById(washerId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (token) {
+      // Remove specific token
+      user.fcm_tokens = user.fcm_tokens.filter(t => t.token !== token);
+    } else {
+      // Remove all tokens
+      user.fcm_tokens = [];
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'FCM token(s) removed successfully'
+    });
+  } catch (error) {
+    console.error('Error removing washer FCM token:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to remove FCM token'
+    });
+  }
+};
+
+/**
  * Send notification to users (Admin only)
  * POST /api/v1/admin/notifications/send
  */
 export const sendNotification = async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database is not connected. Please check MongoDB connection and try again.'
+      });
+    }
+
     const { target_audience, user_ids, title, message, data } = req.body;
-    const adminId = req.admin?.id; // Get admin ID from authenticated admin
+    const adminId = req.admin?._id?.toString() || req.admin?.id;
 
     if (!title || !message) {
       return res.status(400).json({
@@ -123,7 +233,7 @@ export const sendNotification = async (req, res) => {
     let result;
 
     if (target_audience === 'all') {
-      // Send to all customers
+      // Send Firebase push to all active customers who have at least one FCM token
       result = await notificationService.sendNotificationToAllCustomers(
         title,
         message,

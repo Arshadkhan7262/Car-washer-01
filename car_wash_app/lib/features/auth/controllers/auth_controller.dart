@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../services/auth_service.dart';
 import '../../dashboard/services/location_initialization_service.dart';
+import '../../notifications/controllers/fcm_token_controller.dart';
 
 /// Authentication Controller
 /// Manages Email Authentication flow via Backend API
@@ -46,6 +47,9 @@ class AuthController extends GetxController {
         Get.offAllNamed('/dashboard', arguments: {'isPending': true});
         return true;
       }
+
+      // Initialize FCM token after successful login
+      _initializeFcmToken();
 
       // If account is active, initialize location tracking after navigation
       if (washerStatus == 'active') {
@@ -138,6 +142,9 @@ class AuthController extends GetxController {
       final result = await _authService.verifyEmailOTP(_email!, otp);
 
       isVerifyingOTP.value = false;
+
+      // Initialize FCM token after successful email verification
+      _initializeFcmToken();
 
       // Check if account can login
       final canLogin = result['canLogin'] ?? false;
@@ -288,17 +295,44 @@ class AuthController extends GetxController {
     errorMessage.value = '';
   }
 
-  @override
-  void onClose() {
-    _stopResendTimer();
-    super.onClose();
-  }
-
   /// Get current email
   String? get email => _email;
 
   /// Set email (for password reset flow)
   void setEmail(String email) {
     _email = email.toLowerCase();
+  }
+
+  /// Initialize FCM token controller and save token to backend
+  Future<void> _initializeFcmToken() async {
+    try {
+      // Get or create FCM token controller
+      FcmTokenController? fcmController;
+      if (Get.isRegistered<FcmTokenController>()) {
+        fcmController = Get.find<FcmTokenController>();
+      } else {
+        fcmController = Get.put(FcmTokenController());
+      }
+      
+      // Initialize FCM token
+      if (fcmController != null) {
+        await fcmController.initializeFcmToken();
+      }
+    } catch (e) {
+      // Don't fail auth if FCM token initialization fails
+      print('❌ [AuthController] Error initializing FCM token: $e');
+    }
+  }
+
+  @override
+  void onClose() {
+    _stopResendTimer();
+    // Remove FCM token controller if exists
+    if (Get.isRegistered<FcmTokenController>()) {
+      final fcmController = Get.find<FcmTokenController>();
+      fcmController.removeToken();
+      Get.delete<FcmTokenController>();
+    }
+    super.onClose();
   }
 }

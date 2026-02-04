@@ -1,0 +1,131 @@
+---
+description: Debugging push notifications - backend sends but app doesn't receive
+alwaysApply: false
+globs: **/*notification*.dart,**/*notification*.js,**/*notification*.ts
+---
+
+# Push Notification Debugging Guide
+
+## Backend Successfully Sends, But App Doesn't Receive
+
+### ✅ Backend Logs Show Success
+
+When backend successfully sends notification, you'll see:
+```
+✅ [Notification] Successfully sent! Message ID: projects/upwork-task-8f47c/messages/0:...
+📱 [Notification] Summary: Sent=1, Failed=0
+✅ Sent washer assigned notification to customer for booking CW-2026-XXXX
+```
+
+**This means**: Backend → Firebase communication is working correctly.
+
+### ❌ App Should Show These Logs (But Doesn't)
+
+When app receives notification, you should see:
+
+**Foreground (app is open):**
+```
+📱 [NotificationHandler] ==========================================
+📱 [NotificationHandler] FOREGROUND NOTIFICATION RECEIVED
+📱 [NotificationHandler] Message ID: [messageId]
+📱 [NotificationHandler] Title: [title]
+📱 [NotificationHandler] Body: [body]
+📱 [NotificationHandler] Data: [data]
+```
+
+**Background (app minimized):**
+```
+📱 [Background] ==========================================
+📱 [Background] BACKGROUND NOTIFICATION RECEIVED
+📱 [Background] Title: [title]
+📱 [Background] Body: [body]
+```
+
+### 🔍 Root Cause Analysis
+
+If backend shows `✅ Successfully sent` but app shows NO notification logs:
+
+#### Issue 1: FCM Token Mismatch (Most Common)
+**Symptom**: Backend sends to token `dmMhcDBCSX26G_CqzLto22...` but app has different token
+**Check**:
+- Compare token in backend logs: `📱 [Notification] Token preview: dmMhcDBCSX26G_CqzLto22...`
+- Compare with app logs: `🔑 [FcmTokenController] FCM Token generated: ...`
+- If different → Token mismatch
+
+**Fix**:
+- App refreshes token on startup (in `InitialLoadingScreen`)
+- Verify token saved to backend: `✅ [FcmTokenService] FCM token saved successfully`
+- Check database token matches app token
+
+#### Issue 2: Notification Handler Not Initialized
+**Symptom**: No `📱 [NotificationHandler]` logs at all
+**Check**:
+- App logs should show: `✅ [NotificationHandler] Notification handlers initialized`
+- If missing → Handler not initialized
+
+**Fix**:
+- Ensure `NotificationHandlerService().initialize()` is called
+- Check permission is granted: `📱 [NotificationHandler] Permission granted: authorized`
+- Verify Firebase initialized: `✅ Firebase initialized successfully`
+
+#### Issue 3: Firebase Project Mismatch
+**Symptom**: Backend sends successfully but Firebase doesn't deliver
+**Check**:
+- Backend project: `📱 [Firebase] Project ID: upwork-task-8f47c`
+- App project: Check `firebase_options.dart` → `projectId: 'upwork-task-8f47c'`
+- Must match exactly
+
+**Fix**:
+- Verify both use same Firebase project
+- Check `google-services.json` has correct project_id
+- Ensure backend service account is for same project
+
+### 📋 Debugging Checklist
+
+When notifications don't work:
+
+1. **Check Backend Logs** (Terminal where backend runs):
+   - ✅ `Successfully sent! Message ID: ...` = Backend working
+   - ❌ `Failed to send` = Backend issue (check error code)
+
+2. **Check App Logs** (Flutter console/logcat):
+   - ✅ `FOREGROUND NOTIFICATION RECEIVED` = App receiving
+   - ❌ No notification logs = App not receiving
+
+3. **Compare FCM Tokens**:
+   - Backend log: `Token preview: dmMhcDBCSX26G_CqzLto22...`
+   - App log: `FCM Token generated: ...`
+   - Database: Check user's `fcm_tokens` array
+   - **Must all match!**
+
+4. **Verify Handler Initialization**:
+   - App should show: `✅ [NotificationHandler] Notification handlers initialized`
+   - Permission: `Permission granted: authorized`
+   - Firebase: `✅ Firebase initialized successfully`
+
+### 🎯 Quick Fixes
+
+**If token mismatch:**
+- Restart app (token refreshes on startup)
+- Check `InitialLoadingScreen` refreshes token
+- Verify token saved: `✅ [FcmTokenService] FCM token saved successfully`
+
+**If handler not initialized:**
+- Check `main.dart` initializes notification handler
+- Check `TrackOrderScreen` ensures handler initialized
+- Verify permission granted
+
+**If Firebase project mismatch:**
+- Verify backend `.env` has correct `FIREBASE_PROJECT_ID`
+- Check app `firebase_options.dart` matches
+- Ensure `google-services.json` is correct
+
+### 📊 Expected Flow
+
+1. **Backend**: `✅ Successfully sent! Message ID: ...`
+2. **Firebase**: Delivers to device
+3. **App**: `📱 FOREGROUND NOTIFICATION RECEIVED` (if app open)
+4. **App**: Shows system notification
+5. **App**: Triggers callback if registered
+
+If step 1 works but step 3 doesn't → Token mismatch or handler issue.

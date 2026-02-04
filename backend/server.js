@@ -8,6 +8,8 @@ import connectDatabase from './src/config/database.config.js';
 import errorHandler from './src/errors/errorHandler.js';
 import routes from './src/routes/index.routes.js';
 import getStripeInstance from './src/config/stripe.config.js';
+// Initialize Firebase Admin SDK early (required for notifications)
+import './src/config/firebase.config.js';
 
 // Load environment variables from backend/.env (same dir as server.js)
 dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.env') });
@@ -24,8 +26,9 @@ app.use(cors());
 // Must be before express.json() middleware
 app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase body parser limit for large Firebase tokens
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -139,7 +142,6 @@ const startServer = async () => {
       console.log(`🌐 Network API URL: http://${localIP}:${PORT}/api/v1`);
       console.log(`\n💡 Use the Network API URL to access from other devices on the same network`);
       console.log(`⚠️ Note: MongoDB connection may still be in progress...`);
-      // Load Stripe so backend/.env key is used and logged (fix "No such payment_intent" key mismatch)
       try {
         getStripeInstance();
       } catch (e) {
@@ -147,23 +149,39 @@ const startServer = async () => {
       }
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('❌ Failed to start server:', error.message || error);
     process.exit(1);
   }
 };
 
-startServer();
-
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
-  console.error('❌ Unhandled Rejection:', err);
-  process.exit(1);
+  console.error('❌ UNHANDLED REJECTION! Shutting down...');
+  console.error('Error:', err);
+  // Don't exit - let server continue, but log the error
 });
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  console.error('❌ Uncaught Exception:', err);
-  process.exit(1);
+  console.error('❌ UNCAUGHT EXCEPTION! Shutting down...');
+  console.error('Error:', err);
+  // Don't exit - let server continue, but log the error
+});
+
+startServer();
+
+// Handle unhandled promise rejections (don't exit - log and continue)
+process.on('unhandledRejection', (err) => {
+  console.error('❌ UNHANDLED REJECTION:', err);
+  console.error('Stack:', err.stack);
+  // Don't exit - let server continue, but log the error
+});
+
+// Handle uncaught exceptions (don't exit - log and continue)
+process.on('uncaughtException', (err) => {
+  console.error('❌ UNCAUGHT EXCEPTION:', err);
+  console.error('Stack:', err.stack);
+  // Don't exit - let server continue, but log the error
 });
 
 

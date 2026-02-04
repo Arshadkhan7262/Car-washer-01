@@ -130,11 +130,18 @@ class HomeController extends GetxController {
     } catch (e) {
       isLoadingServices.value = false;
       servicesError.value = e.toString();
-      Get.snackbar(
-        'Error',
-        'Failed to load services: ${e.toString()}',
-        snackPosition: SnackPosition.BOTTOM,
-      );
+      // Don't show snackbar during initialization to avoid blocking UI
+      print('❌ [HomeController] Failed to load services: $e');
+      // Show snackbar only after app is initialized
+      Future.delayed(const Duration(seconds: 2), () {
+        if (Get.context != null) {
+          Get.snackbar(
+            'Error',
+            'Failed to load services: ${e.toString()}',
+            snackPosition: SnackPosition.BOTTOM,
+          );
+        }
+      });
     }
   }
 
@@ -221,11 +228,19 @@ class HomeController extends GetxController {
         return;
       }
 
-      // If location permission is granted, now request notification permission
+      // Note: Notification permission is already requested during login/auth flow
+      // No need to request again here - FCM token should already be registered
       if (permission == LocationPermission.whileInUse || 
           permission == LocationPermission.always) {
-        print('📍 [Location] Permission granted, requesting notification permission...');
-        await _requestNotificationPermission();
+        print('📍 [Location] Permission granted');
+        // Just ensure FCM token is still registered (refresh if needed)
+        if (Get.isRegistered<FcmTokenController>()) {
+          final fcmController = Get.find<FcmTokenController>();
+          if (fcmController.fcmToken.value.isEmpty) {
+            // Token not registered yet, try to initialize
+            await fcmController.initializeFcmToken();
+          }
+        }
       }
 
       // Get location place name (city/locality) - e.g., "Sant Pora"

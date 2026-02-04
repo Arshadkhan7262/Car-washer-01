@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import '../services/fcm_token_service.dart';
+import '../services/notification_handler_service.dart';
 
 /// FCM Token Controller
 /// Manages FCM token lifecycle and synchronization with backend
@@ -54,6 +55,16 @@ class FcmTokenController extends GetxController {
         
         // Save token to backend
         await saveTokenToBackend(token);
+
+        // Initialize notification handler after token is saved
+        // This ensures handlers are set up to receive notifications
+        try {
+          final notificationHandler = NotificationHandlerService();
+          await notificationHandler.initialize();
+          log('✅ [FcmTokenController] Notification handler initialized');
+        } catch (e) {
+          log('⚠️ [FcmTokenController] Error initializing notification handler: $e');
+        }
 
         // Listen for token refresh
         _messaging.onTokenRefresh.listen((newToken) {
@@ -148,11 +159,47 @@ class FcmTokenController extends GetxController {
   Future<void> refreshToken() async {
     try {
       isLoading.value = true;
+      
+      // Check permission status first
+      NotificationSettings settings = await _messaging.getNotificationSettings();
+      
+      if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+          settings.authorizationStatus != AuthorizationStatus.provisional) {
+        log('⚠️ [FcmTokenController] Notification permission not granted, requesting...');
+        // Request permission if not granted
+        settings = await _messaging.requestPermission(
+          alert: true,
+          announcement: false,
+          badge: true,
+          carPlay: false,
+          criticalAlert: false,
+          provisional: false,
+          sound: true,
+        );
+        
+        if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+            settings.authorizationStatus != AuthorizationStatus.provisional) {
+          log('⚠️ [FcmTokenController] Notification permission denied, cannot refresh token');
+          isLoading.value = false;
+          return;
+        }
+      }
+      
       String? token = await _messaging.getToken();
       
       if (token != null) {
         fcmToken.value = token;
+        log('🔑 [FcmTokenController] Token refreshed: ${token.substring(0, 20)}...');
         await saveTokenToBackend(token);
+        
+        // Ensure notification handler is initialized after token refresh
+        try {
+          await NotificationHandlerService().initialize(forceReinitialize: false);
+        } catch (e) {
+          log('⚠️ [FcmTokenController] Error initializing notification handler after refresh: $e');
+        }
+      } else {
+        log('⚠️ [FcmTokenController] Token is null after refresh attempt');
       }
     } catch (e) {
       log('❌ [FcmTokenController] Error refreshing token: $e');

@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../../notifications/controllers/fcm_token_controller.dart';
+import '../../notifications/services/notification_handler_service.dart';
 import '../../../api/api_checker.dart';
 
   /// Authentication Controller
@@ -49,7 +50,6 @@ class AuthController extends GetxController {
       _initializeFcmToken();
 
       // Success - navigate to dashboard
-      // TODO: Update route name when dashboard is ready
       Get.offAllNamed('/dashboard');
       return true;
     } catch (e) {
@@ -249,7 +249,7 @@ class AuthController extends GetxController {
 
   /// Start resend timer (60 seconds)
   /// Initialize FCM token controller and save token to backend
-  /// Note: Permission will be requested after location permission in home screen
+  /// Request permission immediately to ensure token is saved
   Future<void> _initializeFcmToken() async {
     try {
       // Get or create FCM token controller
@@ -259,11 +259,22 @@ class AuthController extends GetxController {
         _fcmTokenController = Get.find<FcmTokenController>();
       }
       
-      // Don't request permission here - it will be requested after location permission
-      // Just check if we can get token (if permission already granted)
+      // Request permission and initialize FCM token immediately
+      // Don't wait for location permission - notifications are critical
       if (_fcmTokenController != null) {
-        await _fcmTokenController!.initializeFcmTokenWithoutPermission();
-        log('✅ [AuthController] FCM token initialization completed (without permission request)');
+        await _fcmTokenController!.initializeFcmToken();
+        log('✅ [AuthController] FCM token initialization completed');
+        
+        // After FCM token is initialized, ensure notification handler is also initialized
+        // This ensures handlers are set up even if main.dart initialization happened before login
+        Future.delayed(const Duration(milliseconds: 500), () async {
+          try {
+            await NotificationHandlerService().initialize();
+            log('✅ [AuthController] Notification handler initialized after FCM token');
+          } catch (e) {
+            log('⚠️ [AuthController] Error initializing notification handler: $e');
+          }
+        });
       }
     } catch (e) {
       log('❌ [AuthController] Error initializing FCM token: $e');
@@ -361,10 +372,9 @@ class AuthController extends GetxController {
 
       // Use Google Sign-In (6.2.2)
       // Explicitly provide serverClientId to ensure ID token can be retrieved
-      // This fixes error 12500 when Android OAuth client is not yet configured
       final GoogleSignIn googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
-        serverClientId: '91468661410-57tg402nos5tf94jvc56ckina69tabkb.apps.googleusercontent.com', // Web Client ID from google-services.json
+        serverClientId: '91468661410-57tg402nos5tf94jvc56ckina69tabkb.apps.googleusercontent.com',
       );
 
       // Sign out any existing Google session
@@ -473,7 +483,87 @@ class AuthController extends GetxController {
         log('❌ Backend authentication failed: $e');
         isLoading.value = false;
         isLoggingIn.value = false;
-        errorMessage.value = 'Backend authentication failed: ${e.toString()}';
+        
+        // Extract user-friendly error message
+        String userMessage = e.toString();
+        String dialogTitle = 'Connection Error';
+        String dialogMessage = '';
+        
+        if (userMessage.contains('Connection timeout') || userMessage.contains('timeout')) {
+          dialogTitle = 'Backend Server Not Reachable';
+          dialogMessage = 'Cannot connect to backend server at http://192.168.18.5:3000\n\n'
+              'Troubleshooting Steps:\n\n'
+              '1. ✅ Check Backend Server\n'
+              '   • Open PowerShell/Terminal\n'
+              '   • Navigate to: cd backend\n'
+              '   • Run: node server.js\n'
+              '   • Look for: "Server running on port 3000"\n\n'
+              '2. ✅ Verify Network Connection\n'
+              '   • Ensure your phone/emulator is on the same WiFi network\n'
+              '   • Check IP address matches: 192.168.18.5\n\n'
+              '3. ✅ Test Connection\n'
+              '   • Open browser on your computer\n'
+              '   • Visit: http://192.168.18.5:3000/api/v1/health\n'
+              '   • Should show: {"success":true,"message":"Server is running"}\n\n'
+              '4. ✅ Check Firewall\n'
+              '   • Windows Firewall should allow Node.js\n'
+              '   • Port 3000 should be accessible\n\n'
+              'If server is running but still can\'t connect:\n'
+              '• Restart the backend server\n'
+              '• Check .env file: API_BASE_URL=http://192.168.18.5:3000/api/v1';
+          
+          userMessage = 'Cannot connect to backend server. Please ensure the server is running.';
+          
+          // Show detailed dialog
+          Get.dialog(
+            AlertDialog(
+              title: Text(dialogTitle),
+              content: SingleChildScrollView(
+                child: Text(
+                  dialogMessage,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Get.back(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+            barrierDismissible: true,
+          );
+          
+          Get.snackbar(
+            'Connection Error',
+            'Cannot reach backend server. See dialog for details.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red.shade100,
+            colorText: Colors.red.shade900,
+            duration: const Duration(seconds: 5),
+          );
+        } else if (userMessage.contains('No internet')) {
+          userMessage = 'No internet connection. Please check your network.';
+          Get.snackbar(
+            'No Internet',
+            'Please check your internet connection and try again.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.orange.shade100,
+            colorText: Colors.orange.shade900,
+          );
+        } else {
+          // Keep original error but make it more readable
+          userMessage = userMessage.replaceAll('Exception: ', '').replaceAll('Google login failed: ', '');
+          Get.snackbar(
+            'Error',
+            userMessage,
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red.shade100,
+            colorText: Colors.red.shade900,
+          );
+        }
+        
+        errorMessage.value = userMessage;
         return false;
       }
     } on PlatformException catch (e) {

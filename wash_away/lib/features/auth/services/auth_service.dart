@@ -451,12 +451,26 @@ class AuthService {
       log('   Token length: ${idToken.length}');
       log('   Token preview: ${idToken.substring(0, 20)}...');
       
-      final response = await _apiClient.post(
+      // Note: Health check removed to avoid extra timeout delay
+      // The main request will fail fast if backend is not available
+      // Retry once on connection reset (intermittent network/backend)
+      ApiResponse response = await _apiClient.post(
         '/auth/google/customer',
         body: {
           'idToken': idToken,
         },
       );
+      final isConnectionError = !response.success &&
+          ((response.error?.toLowerCase().contains('connection lost') ?? false) ||
+           (response.error?.toLowerCase().contains('connection reset') ?? false));
+      if (isConnectionError) {
+        log('🔄 [loginWithGoogle] Connection reset - retrying once in 2s...');
+        await Future<void>.delayed(const Duration(seconds: 2));
+        response = await _apiClient.post(
+          '/auth/google/customer',
+          body: {'idToken': idToken},
+        );
+      }
 
       log('📥 [loginWithGoogle] Backend response received');
       log('   Success: ${response.success}');

@@ -7,6 +7,7 @@ import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
 import '../features/bookings/services/booking_service.dart';
 import '../controllers/book_controller.dart';
+import '../features/notifications/services/notification_handler_service.dart';
 import 'washer_tracking_map_screen.dart';
 
 class AppColors {
@@ -62,6 +63,7 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
   Timer? _uiUpdateTimer;
   bool _isRefreshing = false;
   DateTime? _lastUpdateTime;
+  BookingStatusCallback? _bookingStatusCallback;
   
   List<String> imagePath = [
     'assets/images/car5.png',
@@ -76,6 +78,24 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
     super.initState();
     bookingIdDisplay = widget.bookingId;
     _fetchTrackingData();
+    
+    // Ensure notification handler is initialized before registering callback
+    _ensureNotificationHandlerInitialized();
+    
+    // Register callback for booking status notifications
+    _bookingStatusCallback = (String bookingId, Map<String, dynamic> data) {
+      if (bookingId == widget.bookingId && mounted) {
+        developer.log('📱 [TrackOrderScreen] Booking status update received via notification');
+        developer.log('📱 Status: ${data['status']}');
+        // Immediately refresh tracking data
+        _fetchTrackingData(silent: true);
+      }
+    };
+    
+    NotificationHandlerService().registerBookingCallback(
+      widget.bookingId,
+      _bookingStatusCallback!,
+    );
     
     // Start periodic refresh every 5 seconds for real-time updates
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
@@ -102,10 +122,30 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
     });
   }
 
+  /// Ensure notification handler is initialized
+  Future<void> _ensureNotificationHandlerInitialized() async {
+    try {
+      developer.log('🔄 [TrackOrderScreen] Ensuring notification handler is initialized...');
+      await NotificationHandlerService().initialize(forceReinitialize: false);
+      developer.log('✅ [TrackOrderScreen] Notification handler initialized');
+    } catch (e) {
+      developer.log('⚠️ [TrackOrderScreen] Error initializing notification handler: $e');
+    }
+  }
+
   @override
   void dispose() {
     _refreshTimer?.cancel();
     _uiUpdateTimer?.cancel();
+    
+    // Unregister callback
+    if (_bookingStatusCallback != null) {
+      NotificationHandlerService().unregisterBookingCallback(
+        widget.bookingId,
+        _bookingStatusCallback!,
+      );
+    }
+    
     super.dispose();
   }
 

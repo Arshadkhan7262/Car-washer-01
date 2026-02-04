@@ -5,6 +5,7 @@ import Service from '../models/Service.model.js';
 import Washer from '../models/Washer.model.js';
 import AppError from '../errors/AppError.js';
 import * as couponService from './coupon.service.js';
+import { sendNotificationToUser } from './notification.service.js';
 
 /**
  * Generate unique booking ID
@@ -241,7 +242,8 @@ export const updateBooking = async (bookingId, updateData) => {
     throw new AppError('Booking not found', 404);
   }
 
-  // If status is being updated, add to timeline
+  // If status is being updated, add to timeline and send notification
+  const previousStatus = booking.status;
   if (updateData.status && updateData.status !== booking.status) {
     if (!updateData.timeline) {
       updateData.timeline = booking.timeline || [];
@@ -251,9 +253,43 @@ export const updateBooking = async (bookingId, updateData) => {
       timestamp: new Date(),
       note: updateData.status_note || updateData.note || `Status changed to ${updateData.status}`
     });
+
+    // Send notification to customer about status change
+    try {
+      const statusMessages = {
+        'accepted': { title: 'Washer Accepted', body: 'Your washer has accepted the booking and is preparing', status: 'accepted' },
+        'on_the_way': { title: 'Washer On The Way', body: 'Your washer is on the way to your location', status: 'onTheWay' },
+        'arrived': { title: 'Washer Arrived', body: 'Your washer has arrived at your location', status: 'arrived' },
+        'in_progress': { title: 'Washing Started', body: 'Your car wash has started', status: 'washing' },
+        'completed': { title: 'Service Completed', body: 'Your car wash service has been completed', status: 'completed' },
+        'cancelled': { title: 'Booking Cancelled', body: 'Your booking has been cancelled', status: 'cancelled' },
+      };
+
+      const message = statusMessages[updateData.status];
+      if (message) {
+        const bookingId = booking.booking_id || booking._id.toString();
+        await sendNotificationToUser(
+          booking.customer_id.toString(),
+          message.title,
+          message.body,
+          {
+            type: 'booking_status',
+            booking_id: bookingId,
+            status: message.status,
+            screen: 'track_order', // Navigation screen
+            action: 'navigate', // Action to perform
+          }
+        );
+        console.log(`✅ Sent ${updateData.status} notification to customer for booking ${bookingId}`);
+      }
+    } catch (notifError) {
+      // Don't fail the update if notification fails
+      console.error('❌ Failed to send status notification:', notifError.message);
+    }
   }
 
   // If washer is being assigned, validate washer exists and add to timeline
+  const previousWasherId = booking.washer_id?.toString();
   if (updateData.washer_id) {
     const washer = await Washer.findById(updateData.washer_id);
     if (!washer) {
@@ -278,6 +314,50 @@ export const updateBooking = async (bookingId, updateData) => {
       timestamp: new Date(),
       note: `Washer ${washer.name} assigned - waiting for acceptance`
     });
+
+    // Send notification if washer was just assigned (not reassigned)
+    if (!previousWasherId || previousWasherId !== updateData.washer_id.toString()) {
+      try {
+        const bookingId = booking.booking_id || booking._id.toString();
+        
+        // Send notification to customer
+        await sendNotificationToUser(
+          booking.customer_id.toString(),
+          'Washer Assigned',
+          `${washer.name} has been assigned to your booking`,
+          {
+            type: 'booking_status',
+            booking_id: bookingId,
+            status: 'washerAssigned',
+            washer_name: washer.name,
+            screen: 'track_order', // Navigation screen
+            action: 'navigate', // Action to perform
+          }
+        );
+        console.log(`✅ Sent washer assigned notification to customer for booking ${bookingId}`);
+        
+        // Send notification to washer
+        if (washer.user_id) {
+          await sendNotificationToUser(
+            washer.user_id.toString(),
+            'New Job Assigned',
+            `You have been assigned a new job: ${bookingId}`,
+            {
+              type: 'job_assigned',
+              booking_id: bookingId,
+              job_id: bookingId, // Support both keys
+              status: 'pending',
+              screen: 'jobs', // Navigation screen
+              action: 'navigate', // Action to perform
+            }
+          );
+          console.log(`✅ Sent job assigned notification to washer ${washer.name} for booking ${bookingId}`);
+        }
+      } catch (notifError) {
+        // Don't fail the update if notification fails
+        console.error('❌ Failed to send washer assigned notification:', notifError.message);
+      }
+    }
   }
 
   // Update booking

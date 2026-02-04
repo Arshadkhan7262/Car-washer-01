@@ -11,6 +11,7 @@
  * - Washers: is_active=true, email_verified=false, Washer profile created with status='pending', OTP email sent
  */
 
+import mongoose from 'mongoose';
 import User from '../models/User.model.js';
 import Washer from '../models/Washer.model.js';
 import AppError from '../errors/AppError.js';
@@ -30,6 +31,11 @@ const generateEmailOTP = () => {
  * @returns {Promise<Object>} User data with JWT tokens
  */
 export const googleLoginWithFirebase = async (idToken, role) => {
+  // Check MongoDB connection - fail fast if not connected
+  if (mongoose.connection.readyState !== 1) {
+    throw new AppError('Database connection not available. Please try again in a moment.', 503);
+  }
+
   // Validate role
   if (!['customer', 'washer'].includes(role)) {
     throw new AppError('Invalid role. Must be "customer" or "washer"', 400);
@@ -52,10 +58,20 @@ export const googleLoginWithFirebase = async (idToken, role) => {
   const userName = firebaseUser.name || firebaseUser.email.split('@')[0];
 
   // Find existing user by firebaseUid + role
-  let user = await User.findOne({ 
-    firebaseUid: firebaseUser.uid, 
-    role: role 
-  });
+  let user;
+  try {
+    user = await User.findOne({ 
+      firebaseUid: firebaseUser.uid, 
+      role: role 
+    });
+  } catch (dbError) {
+    // If MongoDB isn't connected, the check above should have caught it
+    // But handle any other DB errors gracefully
+    if (mongoose.connection.readyState !== 1) {
+      throw new AppError('Database connection not available. Please try again in a moment.', 503);
+    }
+    throw new AppError(`Database error: ${dbError.message}`, 500);
+  }
 
   if (user) {
     // Existing user - login flow
@@ -92,15 +108,30 @@ export const googleLoginWithFirebase = async (idToken, role) => {
     // Update lastLogin timestamp
     user.lastLogin = new Date();
     
-    await user.save();
+    try {
+      await user.save();
+    } catch (saveError) {
+      if (mongoose.connection.readyState !== 1) {
+        throw new AppError('Database connection not available. Please try again in a moment.', 503);
+      }
+      throw new AppError(`Failed to save user: ${saveError.message}`, 500);
+    }
   } else {
     // New user - registration flow
     
     // Check if email already exists with this role (different Firebase UID)
-    const existingEmailUser = await User.findOne({ 
-      email: normalizedEmail, 
-      role: role 
-    });
+    let existingEmailUser;
+    try {
+      existingEmailUser = await User.findOne({ 
+        email: normalizedEmail, 
+        role: role 
+      });
+    } catch (dbError) {
+      if (mongoose.connection.readyState !== 1) {
+        throw new AppError('Database connection not available. Please try again in a moment.', 503);
+      }
+      throw new AppError(`Database error: ${dbError.message}`, 500);
+    }
 
     if (existingEmailUser) {
       // Email exists but different Firebase UID - update to new Firebase UID
@@ -137,15 +168,30 @@ export const googleLoginWithFirebase = async (idToken, role) => {
       
       existingEmailUser.lastLogin = new Date();
       
-      await existingEmailUser.save();
+      try {
+        await existingEmailUser.save();
+      } catch (saveError) {
+        if (mongoose.connection.readyState !== 1) {
+          throw new AppError('Database connection not available. Please try again in a moment.', 503);
+        }
+        throw new AppError(`Failed to save user: ${saveError.message}`, 500);
+      }
       user = existingEmailUser;
       
       console.log(`✅ Linked Google account to existing email account: ${normalizedEmail}`);
     } else {
       // Check if email exists with different role
-      const existingEmailDifferentRole = await User.findOne({ 
-        email: normalizedEmail 
-      });
+      let existingEmailDifferentRole;
+      try {
+        existingEmailDifferentRole = await User.findOne({ 
+          email: normalizedEmail 
+        });
+      } catch (dbError) {
+        if (mongoose.connection.readyState !== 1) {
+          throw new AppError('Database connection not available. Please try again in a moment.', 503);
+        }
+        throw new AppError(`Database error: ${dbError.message}`, 500);
+      }
       
       if (existingEmailDifferentRole) {
         throw new AppError('This email is already registered with a different account type', 400);
@@ -156,7 +202,8 @@ export const googleLoginWithFirebase = async (idToken, role) => {
       const phonePlaceholder = `google_${firebaseUser.uid.substring(0, 10)}`;
 
       // Create new user with Google OAuth via Firebase (same flow as email registration)
-      user = await User.create({
+      try {
+        user = await User.create({
         name: userName,
         email: normalizedEmail,
         phone: phonePlaceholder,
@@ -187,7 +234,14 @@ export const googleLoginWithFirebase = async (idToken, role) => {
         code: String(otpCode).trim(), // Ensure OTP is stored as trimmed string
         expiresAt: otpExpires
       };
-      await user.save();
+      try {
+        await user.save();
+      } catch (saveError) {
+        if (mongoose.connection.readyState !== 1) {
+          throw new AppError('Database connection not available. Please try again in a moment.', 503);
+        }
+        throw new AppError(`Failed to save user: ${saveError.message}`, 500);
+      }
 
       console.log(`📧 Generated OTP for ${normalizedEmail} (Google Sign-In): "${otpCode}" (stored as: "${user.otp.code}")`);
 
@@ -195,30 +249,46 @@ export const googleLoginWithFirebase = async (idToken, role) => {
       emailService.sendOTPEmail(normalizedEmail, otpCode, userName || (role === 'washer' ? 'Washer' : 'Customer'), role)
         .then(() => {
           console.log(`✅ Registration OTP email sent to ${normalizedEmail} (Google Sign-In)`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`📧 If email not received, check Spam/Junk. OTP for ${normalizedEmail}: ${otpCode}`);
+          }
         })
         .catch((emailError) => {
           console.error(`❌ Failed to send registration OTP email to ${normalizedEmail}:`, emailError);
           if (process.env.NODE_ENV === 'development') {
-            console.log(`📧 Development mode - Registration OTP: ${otpCode}`);
+            console.log(`📧 Development mode - Registration OTP for ${normalizedEmail}: ${otpCode}`);
           }
           // Don't throw error - registration succeeds even if email fails
         });
 
       // For washers, create washer profile with 'pending' status (same as email registration)
       if (role === 'washer') {
-        // Check if washer profile already exists (shouldn't happen, but safety check)
-        const existingWasher = await Washer.findOne({ user_id: user._id });
-        if (!existingWasher) {
-          await Washer.create({
-            user_id: user._id,
-            name: userName,
-            phone: phonePlaceholder,
-            email: normalizedEmail,
-            status: 'pending', // Start as pending - admin must approve (same as email registration)
-            online_status: false
-          });
-          console.log(`✅ Washer profile created with pending status for ${normalizedEmail}`);
+        try {
+          // Check if washer profile already exists (shouldn't happen, but safety check)
+          const existingWasher = await Washer.findOne({ user_id: user._id });
+          if (!existingWasher) {
+            await Washer.create({
+              user_id: user._id,
+              name: userName,
+              phone: phonePlaceholder,
+              email: normalizedEmail,
+              status: 'pending', // Start as pending - admin must approve (same as email registration)
+              online_status: false
+            });
+            console.log(`✅ Washer profile created with pending status for ${normalizedEmail}`);
+          }
+        } catch (washerError) {
+          if (mongoose.connection.readyState !== 1) {
+            throw new AppError('Database connection not available. Please try again in a moment.', 503);
+          }
+          throw new AppError(`Failed to create washer profile: ${washerError.message}`, 500);
         }
+      }
+      } catch (createError) {
+        if (mongoose.connection.readyState !== 1) {
+          throw new AppError('Database connection not available. Please try again in a moment.', 503);
+        }
+        throw new AppError(`Failed to create user: ${createError.message}`, 500);
       }
     }
   }

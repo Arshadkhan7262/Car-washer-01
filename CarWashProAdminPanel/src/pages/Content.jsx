@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
 import { format } from 'date-fns';
 import PageHeader from '@/components/Components/ui/PageHeader.jsx';
@@ -78,11 +79,18 @@ export default function Content() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       setNotificationForm({ target_audience: 'all', title: '', message: '' });
-      // Show success message (you can use toast library here)
-      alert(`Notification sent successfully! ${result.data?.message || ''}`);
+      const d = result.data;
+      if (d?.totalSent !== undefined && d?.totalUsers !== undefined) {
+        toast.success(
+          `Push notification sent via Firebase. ${d.totalSent} device(s) across ${d.totalUsers} user(s)` +
+          (d.totalFailed > 0 ? `, ${d.totalFailed} failed.` : '.')
+        );
+      } else {
+        toast.success(result.message || 'Push notification sent successfully.');
+      }
     },
     onError: (error) => {
-      alert(`Failed to send notification: ${error.message}`);
+      toast.error(error.message || 'Failed to send push notification');
     }
   });
 
@@ -207,6 +215,9 @@ export default function Content() {
                 <Megaphone className="w-5 h-5" />
                 Send Push Notification
               </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Notifications are sent via Firebase Cloud Messaging (FCM) to the selected audience. Only users who have the app and have granted notification permission will receive them.
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -219,10 +230,10 @@ export default function Content() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Users</SelectItem>
-                    <SelectItem value="active">Active Customers</SelectItem>
+                    <SelectItem value="all">All Users (all customers with FCM token)</SelectItem>
+                    <SelectItem value="active">Active Customers (logged in last 30 days)</SelectItem>
                     <SelectItem value="inactive">Inactive Customers (30+ days)</SelectItem>
-                    <SelectItem value="new">New Customers (7 days)</SelectItem>
+                    <SelectItem value="new">New Customers (last 7 days)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -247,7 +258,7 @@ export default function Content() {
                 className="w-full"
                 onClick={() => {
                   if (!notificationForm.title || !notificationForm.message) {
-                    alert('Please fill in both title and message');
+                    toast.error('Please fill in both title and message');
                     return;
                   }
                   sendNotificationMutation.mutate({

@@ -16,6 +16,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -47,6 +48,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:21.0.0")
     // AppCompat theme support (required for Stripe)
     implementation("androidx.appcompat:appcompat:1.6.1")
+    // Core library desugaring (required for flutter_local_notifications)
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
 
 flutter {
