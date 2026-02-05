@@ -372,7 +372,15 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
           color: Theme.of(context).iconTheme.color,
         ),
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            // Check if we can pop (there's a previous route)
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              // No previous route (came from notification), navigate to dashboard
+              Get.offAllNamed('/dashboard');
+            }
+          },
           icon: Icon(Icons.arrow_back),
         ),
         title: ListTile(

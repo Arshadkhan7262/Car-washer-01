@@ -29,14 +29,13 @@ class EnvConfig {
       return url;
     }
     
-    // Fallback to default based on platform
+    // Fallback when .env missing: set to your PC IP (same WiFi as device)
     if (Platform.isAndroid) {
-      // Check if emulator (can be detected, but for now use default)
-      return 'http://192.168.18.22:3000/api/v1';
+      return 'http://192.168.18.29:3000/api/v1';
     } else if (Platform.isIOS) {
-      return 'http://192.168.18.22:3000/api/v1';
+      return 'http://192.168.18.29:3000/api/v1';
     }
-    return 'http://192.168.18.7:3000/api/v1';
+    return 'http://192.168.18.29:3000/api/v1';
   }
 
   /// Get Stripe publishable key from .env

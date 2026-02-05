@@ -55,28 +55,29 @@ export const sendNotificationToUser = async (userId, title, body, data = {}) => 
       dataPayload[key] = String(value);
     }
     dataPayload.click_action = 'FLUTTER_NOTIFICATION_CLICK';
-    // Always include title/body in data so app can show when notification payload is missing (e.g. some Android cases)
+    // Always include title/body in data so app can show notifications
     dataPayload.title = String(title);
     dataPayload.body = String(body);
     
+    // IMPORTANT: Send data-only payload to prevent duplicate notifications
+    // The Flutter app will handle displaying notifications via flutter_local_notifications
+    // This ensures we have full control over notification appearance and prevents duplicates
+    // Firebase will still deliver the message, but won't auto-display it
     const message = {
-      notification: {
-        title: title,
-        body: body
-      },
+      // Remove notification payload - app will handle display via flutter_local_notifications
+      // This prevents Firebase from auto-displaying and creating duplicates
       data: dataPayload,
       android: {
         priority: 'high',
-        notification: {
-          sound: 'default',
-          channelId: 'high_importance_channel'
-        }
+        // Remove notification config - app handles display
       },
       apns: {
         payload: {
           aps: {
             sound: 'default',
-            badge: 1
+            badge: 1,
+            // Use content-available to ensure app receives data in background
+            'content-available': 1
           }
         }
       }

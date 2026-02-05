@@ -1,7 +1,7 @@
+import 'dart:async';
 import 'dart:developer';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
-import 'package:flutter/material.dart' show EdgeInsets;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,8 +19,16 @@ class NotificationHandlerService {
   NotificationHandlerService._internal();
 
   bool _initialized = false;
+  bool _isInitializing = false; // Prevent concurrent initialization
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  
+  // Store subscriptions to prevent duplicate listeners
+  StreamSubscription<RemoteMessage>? _onMessageSubscription;
+  StreamSubscription<RemoteMessage>? _onMessageOpenedAppSubscription;
+  
+  // Track processed message IDs to prevent duplicate notifications
+  final Set<String> _processedMessageIds = {};
   
   // Map of booking_id -> callback functions
   final Map<String, List<BookingStatusCallback>> _bookingCallbacks = {};
@@ -62,67 +70,62 @@ class NotificationHandlerService {
     }
   }
 
-  /// Handle navigation based on notification data
+  /// Handle navigation based on notification data.
+  /// When user taps a notification (foreground, background, or terminated), navigate to Track Order only.
   Future<void> _handleNotificationNavigation(Map<String, dynamic> data, {bool delayNavigation = false}) async {
     try {
+      // Support both booking_id and bookingId (backend may send either)
+      final bookingId = data['booking_id']?.toString() ?? data['bookingId']?.toString();
       final screen = data['screen']?.toString();
       final action = data['action']?.toString();
-      final bookingId = data['booking_id']?.toString();
       final notificationType = data['type']?.toString();
 
       log('📱 [NotificationHandler] Navigation request - bookingId: $bookingId, type: $notificationType, action: $action, screen: $screen');
 
-      // Navigate if we have a booking_id and it's a booking_status notification
-      // Don't require action to be 'navigate' - if it's booking_status, navigate anyway
+      // Navigate to Track Order whenever we have a booking_id (any notification tap = go to track order)
       if (bookingId != null && bookingId.isNotEmpty) {
-        // Check if this is a booking status notification
-        final isBookingStatus = notificationType == 'booking_status' || 
-                                screen == 'track_order' ||
-                                action == 'navigate';
+        log('📱 [NotificationHandler] Processing navigation to TrackOrderScreen for booking: $bookingId');
 
-        if (isBookingStatus) {
-          log('📱 [NotificationHandler] Processing navigation for booking: $bookingId');
+        if (delayNavigation) {
+          log('📱 [NotificationHandler] Delaying navigation for app initialization...');
+          await Future.delayed(const Duration(milliseconds: 1500));
+        }
 
-          // If delayNavigation is true, wait a bit for app to fully initialize
-          if (delayNavigation) {
-            log('📱 [NotificationHandler] Delaying navigation for app initialization...');
-            await Future.delayed(const Duration(milliseconds: 1500));
-          }
+        await Future.delayed(const Duration(milliseconds: 500));
 
-          // Wait a bit more to ensure GetX context is ready
-          await Future.delayed(const Duration(milliseconds: 500));
+        if (Get.context != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('pending_navigation_booking_id');
+          await prefs.remove('pending_navigation_screen');
 
-          // Check if GetX context is available
-          if (Get.context != null) {
-            // Clear any pending navigation
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.remove('pending_navigation_booking_id');
-            await prefs.remove('pending_navigation_screen');
-            
-            // Navigate to track order screen
-            log('📱 [NotificationHandler] Navigating to TrackOrderScreen for booking: $bookingId');
+          // Navigate to dashboard first, then push TrackOrderScreen on top
+          // This ensures there's always a screen to go back to
+          log('📱 [NotificationHandler] Navigating to TrackOrderScreen for booking: $bookingId');
+          Get.offAllNamed('/dashboard');
+          // Wait a bit for dashboard to load, then push TrackOrderScreen
+          Future.delayed(const Duration(milliseconds: 300), () {
             Get.to(() => TrackerOrderScreen(bookingId: bookingId));
-            log('✅ [NotificationHandler] Successfully navigated to TrackOrderScreen');
-          } else {
-            log('⚠️ [NotificationHandler] GetX context not available, storing for later navigation');
-            await _storePendingNavigation(data);
-            
-            // Try again after a delay
-            Future.delayed(const Duration(milliseconds: 2000), () async {
-              if (Get.context != null) {
-                final prefs = await SharedPreferences.getInstance();
-                final storedBookingId = prefs.getString('pending_navigation_booking_id');
-                if (storedBookingId == bookingId) {
-                  await prefs.remove('pending_navigation_booking_id');
-                  await prefs.remove('pending_navigation_screen');
-                  Get.to(() => TrackerOrderScreen(bookingId: bookingId));
-                  log('✅ [NotificationHandler] Navigated after retry');
-                }
-              }
-            });
-          }
+          });
+          log('✅ [NotificationHandler] Successfully navigated to TrackOrderScreen');
         } else {
-          log('⚠️ [NotificationHandler] Not a booking status notification, skipping navigation');
+          log('⚠️ [NotificationHandler] GetX context not available, storing for later navigation');
+          await _storePendingNavigation(data);
+          Future.delayed(const Duration(milliseconds: 2000), () async {
+            if (Get.context != null) {
+              final prefs = await SharedPreferences.getInstance();
+              final storedBookingId = prefs.getString('pending_navigation_booking_id');
+              if (storedBookingId != null && storedBookingId.isNotEmpty) {
+                await prefs.remove('pending_navigation_booking_id');
+                await prefs.remove('pending_navigation_screen');
+                // Navigate to dashboard first, then push TrackOrderScreen
+                Get.offAllNamed('/dashboard');
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  Get.to(() => TrackerOrderScreen(bookingId: storedBookingId));
+                });
+                log('✅ [NotificationHandler] Navigated after retry');
+              }
+            }
+          });
         }
       } else {
         log('⚠️ [NotificationHandler] No booking_id found in notification data');
@@ -153,12 +156,10 @@ class NotificationHandlerService {
         }
         
         if (Get.context != null) {
-          // Clear pending navigation
           await prefs.remove('pending_navigation_booking_id');
           await prefs.remove('pending_navigation_screen');
-          
-          // Navigate
-          Get.to(() => TrackerOrderScreen(bookingId: bookingId));
+          // Replace stack so user sees only Track Order
+          Get.offAll(() => TrackerOrderScreen(bookingId: bookingId));
           log('✅ [NotificationHandler] Handled pending navigation to TrackOrderScreen for booking: $bookingId');
         } else {
           log('⚠️ [NotificationHandler] GetX context still not available after retries');
@@ -199,23 +200,48 @@ class NotificationHandlerService {
 
   /// Initialize notification handlers
   Future<void> initialize({bool forceReinitialize = false}) async {
-    if (_initialized && !forceReinitialize) {
-      log('📱 [NotificationHandler] Already initialized - checking status...');
-      
-      // Verify listeners are still active
-      try {
-        final token = await _messaging.getToken();
-        final settings = await _messaging.getNotificationSettings();
-        log('📱 [NotificationHandler] Current FCM token: ${token != null ? token.substring(0, 30) + "..." : "NULL"}');
-        log('📱 [NotificationHandler] Permission: ${settings.authorizationStatus}');
-        log('📱 [NotificationHandler] Listeners should be active - if notifications not received, check token match');
-      } catch (e) {
-        log('⚠️ [NotificationHandler] Error checking status: $e');
+    // Prevent concurrent initialization
+    if (_isInitializing) {
+      log('⚠️ [NotificationHandler] Initialization already in progress, waiting...');
+      // Wait for current initialization to complete
+      int waitCount = 0;
+      while (_isInitializing && waitCount < 50) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        waitCount++;
       }
-      return;
+      if (_initialized) {
+        log('✅ [NotificationHandler] Initialization completed by another call');
+        return;
+      }
     }
-
+    
+    _isInitializing = true;
+    
     try {
+      // Always cancel existing subscriptions first to prevent duplicates
+      await _onMessageSubscription?.cancel();
+      await _onMessageOpenedAppSubscription?.cancel();
+      _onMessageSubscription = null;
+      _onMessageOpenedAppSubscription = null;
+      
+      if (_initialized && !forceReinitialize) {
+        log('📱 [NotificationHandler] Already initialized - checking status...');
+        
+        // Verify listeners are still active
+        try {
+          final token = await _messaging.getToken();
+          final settings = await _messaging.getNotificationSettings();
+          log('📱 [NotificationHandler] Current FCM token: ${token != null ? token.substring(0, 30) + "..." : "NULL"}');
+          log('📱 [NotificationHandler] Permission: ${settings.authorizationStatus}');
+          log('📱 [NotificationHandler] Listeners should be active - if notifications not received, check token match');
+        } catch (e) {
+          log('⚠️ [NotificationHandler] Error checking status: $e');
+        }
+        _isInitializing = false;
+        return;
+      }
+
+      // Main initialization code
       log('📱 [NotificationHandler] ==========================================');
       log('📱 [NotificationHandler] Initializing notification handlers...');
       await Future.delayed(Duration.zero); // yield to UI thread
@@ -224,6 +250,21 @@ class NotificationHandlerService {
       NotificationSettings settings = await _messaging.getNotificationSettings();
       log('📱 [NotificationHandler] Permission status: ${settings.authorizationStatus}');
       await Future.delayed(Duration.zero); // yield
+      
+      // IMPORTANT: Disable Firebase's automatic notification display in foreground
+      // We handle notifications manually via flutter_local_notifications to avoid duplicates
+      // This prevents Firebase from auto-showing notifications when app is in foreground
+      try {
+        await _messaging.setForegroundNotificationPresentationOptions(
+          alert: false,  // Don't auto-show alert (we'll show via flutter_local_notifications)
+          badge: true,   // Still update badge count
+          sound: false,  // Don't auto-play sound (we'll handle it in our custom notification)
+        );
+        log('✅ [NotificationHandler] Disabled Firebase auto-display in foreground (iOS)');
+      } catch (e) {
+        // setForegroundNotificationPresentationOptions is iOS-only, ignore on Android
+        log('ℹ️ [NotificationHandler] setForegroundNotificationPresentationOptions not available (Android)');
+      }
 
       // Get and log current FCM token for verification
       try {
@@ -273,11 +314,41 @@ class NotificationHandlerService {
       // Listen for foreground messages
       // Show system notification using flutter_local_notifications
       log('📱 [NotificationHandler] Registering onMessage listener...');
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      
+      // Cancel existing subscription to prevent duplicates
+      await _onMessageSubscription?.cancel();
+      
+      // Store subscription to prevent garbage collection and track it
+      _onMessageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+        // Prevent duplicate notifications by checking message ID
+        // Use a combination of messageId, booking_id, status, and timestamp for reliable duplicate detection
+        final bookingId = message.data['booking_id']?.toString() ?? '';
+        final status = message.data['status']?.toString() ?? '';
+        final timestamp = message.sentTime?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
+        final messageId = message.messageId ?? 
+                         '${bookingId}_${status}_${timestamp}';
+        
+        // Create a unique key for duplicate detection
+        final duplicateKey = '${messageId}_${bookingId}_${status}';
+        
+        if (_processedMessageIds.contains(duplicateKey)) {
+          log('⚠️ [NotificationHandler] Duplicate notification detected (Key: $duplicateKey), skipping...');
+          log('⚠️ [NotificationHandler] Message ID: $messageId, Booking: $bookingId, Status: $status');
+          return;
+        }
+        
+        _processedMessageIds.add(duplicateKey);
+        // Clean up old message IDs (keep only last 100)
+        if (_processedMessageIds.length > 100) {
+          _processedMessageIds.remove(_processedMessageIds.first);
+        }
+        
+        log('📱 [NotificationHandler] Processing notification (Key: $duplicateKey)');
+        
         log('📱 [NotificationHandler] ==========================================');
         log('📱 [NotificationHandler] ✅✅✅ FOREGROUND NOTIFICATION RECEIVED ✅✅✅');
         debugPrint('📱 [Notification] FOREGROUND RECEIVED: ${message.notification?.title ?? message.data['title']}');
-        log('📱 [NotificationHandler] Message ID: ${message.messageId}');
+        log('📱 [NotificationHandler] Message ID: ${messageId}');
         log('📱 [NotificationHandler] Has notification: ${message.notification != null}');
         log('📱 [NotificationHandler] Title: ${message.notification?.title}');
         log('📱 [NotificationHandler] Body: ${message.notification?.body}');
@@ -307,19 +378,8 @@ class NotificationHandlerService {
           data: message.data,
         );
 
-        // Show in-app snackbar so user always sees something when app is open
-        try {
-          if (Get.isSnackbarOpen) Get.closeAllSnackbars();
-          Get.snackbar(
-            title,
-            body,
-            snackPosition: SnackPosition.TOP,
-            duration: const Duration(seconds: 4),
-            margin: const EdgeInsets.all(12),
-          );
-        } catch (_) {}
-
         // Show system notification in tray (foreground)
+        // Only show system notification, not snackbar to avoid duplicate notifications
         try {
           await _showSystemNotification(title, body, message.data);
           log('✅ [NotificationHandler] System notification displayed');
@@ -333,41 +393,42 @@ class NotificationHandlerService {
         _storePendingNavigation(message.data);
       });
 
-      // Handle notification when app is opened from terminated state
+      // Handle notification when app is opened from terminated state (user tapped notification)
       log('📱 [NotificationHandler] Checking for initial message (terminated state)...');
       RemoteMessage? initialMessage = await _messaging.getInitialMessage();
       if (initialMessage != null) {
         log('📱 [NotificationHandler] ==========================================');
         log('📱 [NotificationHandler] ✅✅✅ APP OPENED FROM TERMINATED STATE ✅✅✅');
         log('📱 [NotificationHandler] Message ID: ${initialMessage.messageId}');
-        log('📱 [NotificationHandler] Title: ${initialMessage.notification?.title}');
-        log('📱 [NotificationHandler] Body: ${initialMessage.notification?.body}');
         log('📱 [NotificationHandler] Data: ${initialMessage.data}');
         log('📱 [NotificationHandler] ==========================================');
-        
+
+        // Store pending so InitialLoadingScreen can navigate to Track Order (avoids race with dashboard)
+        await _storePendingNavigation(initialMessage.data);
+
         final title = initialMessage.notification?.title ?? initialMessage.data['title'] ?? 'New Notification';
         final body = initialMessage.notification?.body ?? initialMessage.data['body'] ?? 'You have a new message';
-        
-        // Process booking status notifications
         _processBookingNotification(initialMessage);
-        
-        // Add to notification controller
         _notificationController?.addNotification(
           title: title,
           body: body,
           data: initialMessage.data,
         );
 
-        // Navigate when app opens from notification (with delay to ensure app is ready)
-        await _handleNotificationNavigation(initialMessage.data, delayNavigation: true);
+        // Don't await: let InitialLoadingScreen see pending and navigate (so it won't overwrite with dashboard)
+        _handleNotificationNavigation(initialMessage.data, delayNavigation: true);
       } else {
-        // Check for any pending navigation from background handler
         await checkPendingNavigation();
       }
 
       // Handle notification when app is opened from background
       log('📱 [NotificationHandler] Registering onMessageOpenedApp listener...');
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
+      
+      // Cancel existing subscription to prevent duplicates
+      await _onMessageOpenedAppSubscription?.cancel();
+      
+      // Store subscription to prevent garbage collection and track it
+      _onMessageOpenedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
         log('📱 [NotificationHandler] ==========================================');
         log('📱 [NotificationHandler] ✅✅✅ APP OPENED FROM BACKGROUND ✅✅✅');
         log('📱 [NotificationHandler] Message ID: ${message.messageId}');
@@ -397,13 +458,15 @@ class NotificationHandlerService {
       log('✅ [NotificationHandler] Notification handlers initialized');
       debugPrint('✅ [Notification] Handlers ready - push notifications will show in tray and in-app');
       log('📱 [NotificationHandler] Listeners registered:');
-      log('   ✅ onMessage (foreground notifications)');
-      log('   ✅ onMessageOpenedApp (background notifications)');
+      log('   ✅ onMessage (foreground notifications) - Subscription active: ${_onMessageSubscription != null}');
+      log('   ✅ onMessageOpenedApp (background notifications) - Subscription active: ${_onMessageOpenedAppSubscription != null}');
       log('   ✅ getInitialMessage (terminated state)');
       log('📱 [NotificationHandler] ==========================================');
     } catch (e, stackTrace) {
       log('❌ [NotificationHandler] Error initializing: $e');
       log('❌ [NotificationHandler] Stack trace: $stackTrace');
+    } finally {
+      _isInitializing = false;
     }
   }
 

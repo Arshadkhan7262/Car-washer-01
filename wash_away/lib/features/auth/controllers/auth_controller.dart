@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../../notifications/controllers/fcm_token_controller.dart';
 import '../../notifications/services/notification_handler_service.dart';
 import '../../../api/api_checker.dart';
+import '../../../util/constants.dart';
 
   /// Authentication Controller
   /// Manages Customer Authentication flow via Backend API
@@ -491,26 +492,32 @@ class AuthController extends GetxController {
         
         if (userMessage.contains('Connection timeout') || userMessage.contains('timeout')) {
           dialogTitle = 'Backend Server Not Reachable';
-          dialogMessage = 'Cannot connect to backend server at http://192.168.18.5:3000\n\n'
+          // Extract host and port from configured API base URL
+          final baseUrl = AppConstants.baseUrl;
+          final uri = Uri.parse(baseUrl);
+          final serverUrl = '${uri.scheme}://${uri.host}:${uri.port}';
+          final healthUrl = '$serverUrl/health';
+          
+          dialogMessage = 'Cannot connect to backend server at $serverUrl\n\n'
               'Troubleshooting Steps:\n\n'
               '1. ✅ Check Backend Server\n'
               '   • Open PowerShell/Terminal\n'
               '   • Navigate to: cd backend\n'
               '   • Run: node server.js\n'
-              '   • Look for: "Server running on port 3000"\n\n'
+              '   • Look for: "Server running on port ${uri.port}"\n\n'
               '2. ✅ Verify Network Connection\n'
               '   • Ensure your phone/emulator is on the same WiFi network\n'
-              '   • Check IP address matches: 192.168.18.5\n\n'
+              '   • Check IP address matches: ${uri.host}\n\n'
               '3. ✅ Test Connection\n'
               '   • Open browser on your computer\n'
-              '   • Visit: http://192.168.18.5:3000/api/v1/health\n'
+              '   • Visit: $healthUrl\n'
               '   • Should show: {"success":true,"message":"Server is running"}\n\n'
               '4. ✅ Check Firewall\n'
               '   • Windows Firewall should allow Node.js\n'
-              '   • Port 3000 should be accessible\n\n'
+              '   • Port ${uri.port} should be accessible\n\n'
               'If server is running but still can\'t connect:\n'
               '• Restart the backend server\n'
-              '• Check .env file: API_BASE_URL=http://192.168.18.5:3000/api/v1';
+              '• Check .env file: API_BASE_URL=$baseUrl';
           
           userMessage = 'Cannot connect to backend server. Please ensure the server is running.';
           
