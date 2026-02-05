@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +20,7 @@ class NotificationHandlerService {
 
   bool _initialized = false;
   bool _isInitializing = false; // Prevent concurrent initialization
+  bool _notificationChannelCreated = false; // Track if Android channel is created
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   
@@ -33,11 +34,12 @@ class NotificationHandlerService {
   // Map of booking_id -> callback functions
   final Map<String, List<BookingStatusCallback>> _bookingCallbacks = {};
   
-  NotificationController? get _notificationController {
+  NotificationController get _notificationController {
     if (Get.isRegistered<NotificationController>()) {
       return Get.find<NotificationController>();
     }
-    return null;
+    // Initialize if not registered to ensure notifications are always tracked
+    return Get.put(NotificationController());
   }
 
   /// Register a callback for booking status updates
@@ -305,6 +307,7 @@ class NotificationHandlerService {
       // Reset initialized flag if force reinitialize
       if (forceReinitialize) {
         _initialized = false;
+        _notificationChannelCreated = false; // Reset channel flag on reinitialize
       }
 
       // Initialize local notifications for foreground display
@@ -368,29 +371,28 @@ class NotificationHandlerService {
         
         log('📱 [NotificationHandler] Using title: $title, body: $body');
         
-        // Process booking status notifications (for callbacks)
-        _processBookingNotification(message);
-        
-        // Add to notification controller (for notification list / in-app screen)
-        _notificationController?.addNotification(
-          title: title,
-          body: body,
-          data: message.data,
-        );
-
-        // Show system notification in tray (foreground)
-        // Only show system notification, not snackbar to avoid duplicate notifications
+        // FOREGROUND: Show system notification FIRST so it always appears even if later steps fail
         try {
           await _showSystemNotification(title, body, message.data);
-          log('✅ [NotificationHandler] System notification displayed');
+          log('✅ [NotificationHandler] System notification displayed (foreground)');
           debugPrint('✅ [Notification] Shown in tray: $title');
         } catch (e) {
           log('❌ [NotificationHandler] Failed to show system notification: $e');
           debugPrint('❌ [Notification] Tray show failed: $e');
         }
 
-        // Store navigation data - navigation will happen when user taps the notification
-        _storePendingNavigation(message.data);
+        // Then process callbacks, in-app list, and pending navigation (non-blocking for display)
+        try {
+          _processBookingNotification(message);
+          _notificationController.addNotification(
+            title: title,
+            body: body,
+            data: message.data,
+          );
+          _storePendingNavigation(message.data);
+        } catch (e) {
+          log('❌ [NotificationHandler] Error in post-notification processing: $e');
+        }
       });
 
       // Handle notification when app is opened from terminated state (user tapped notification)
@@ -409,7 +411,7 @@ class NotificationHandlerService {
         final title = initialMessage.notification?.title ?? initialMessage.data['title'] ?? 'New Notification';
         final body = initialMessage.notification?.body ?? initialMessage.data['body'] ?? 'You have a new message';
         _processBookingNotification(initialMessage);
-        _notificationController?.addNotification(
+        _notificationController.addNotification(
           title: title,
           body: body,
           data: initialMessage.data,
@@ -444,7 +446,7 @@ class NotificationHandlerService {
         _processBookingNotification(message);
         
         // Add to notification controller
-        _notificationController?.addNotification(
+        _notificationController.addNotification(
           title: title,
           body: body,
           data: message.data,
@@ -531,51 +533,121 @@ class NotificationHandlerService {
       );
       await Future.delayed(Duration.zero); // yield to UI
 
-      // Create Android notification channel
+      // Create Android notification channel - CRITICAL for foreground notifications (max = heads-up on more devices)
       const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        'high_importance_channel', // id
+        'high_importance_channel', // id - must match AndroidManifest.xml
         'High Importance Notifications', // name
         description: 'This channel is used for important notifications.',
-        importance: Importance.high,
+        importance: Importance.max,
         playSound: true,
       );
 
-      await _localNotifications
+      // CRITICAL: Create channel synchronously and verify it was created
+      final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(channel);
+              AndroidFlutterLocalNotificationsPlugin>();
+      
+      if (androidPlugin != null) {
+        try {
+          await androidPlugin.createNotificationChannel(channel);
+          _notificationChannelCreated = true;
+          log('✅ [NotificationHandler] Android notification channel created successfully');
+          debugPrint('✅ [Notification] Channel "high_importance_channel" created');
+        } catch (e) {
+          log('❌ [NotificationHandler] Failed to create Android notification channel: $e');
+          debugPrint('❌ [Notification] Channel creation failed: $e');
+          // Try again after a short delay
+          try {
+            await Future.delayed(const Duration(milliseconds: 200));
+            await androidPlugin.createNotificationChannel(channel);
+            _notificationChannelCreated = true;
+            log('✅ [NotificationHandler] Android notification channel created on retry');
+            debugPrint('✅ [Notification] Channel created on retry');
+          } catch (retryError) {
+            log('❌ [NotificationHandler] Channel creation failed on retry: $retryError');
+            debugPrint('❌ [Notification] Channel creation retry failed: $retryError');
+            _notificationChannelCreated = false;
+          }
+        }
+      } else {
+        // Not Android platform
+        _notificationChannelCreated = true; // Not needed for iOS
+        log('ℹ️ [NotificationHandler] Android plugin not available (not Android platform)');
+      }
 
       log('✅ [NotificationHandler] Local notifications initialized');
+      log('📱 [NotificationHandler] Channel created flag: $_notificationChannelCreated');
     } catch (e) {
       log('❌ [NotificationHandler] Error initializing local notifications: $e');
     }
   }
 
-  /// Show system notification (for foreground state)
+  /// Show system notification (heads-up push notification when app is in foreground)
   Future<void> _showSystemNotification(
     String title,
     String body,
     Map<String, dynamic> data,
   ) async {
     try {
+      // Skip on web platform
+      if (kIsWeb) {
+        log('ℹ️ [NotificationHandler] Skipping notification display on web platform');
+        return;
+      }
+
+      // CRITICAL: Ensure Android notification channel is created before showing notification
+      if (!_notificationChannelCreated) {
+        log('⚠️ [NotificationHandler] Notification channel not created yet, creating now...');
+        debugPrint('⚠️ [Notification] Creating channel before showing notification...');
+        try {
+          const AndroidNotificationChannel channel = AndroidNotificationChannel(
+            'high_importance_channel',
+            'High Importance Notifications',
+            description: 'This channel is used for important notifications.',
+            importance: Importance.max,
+            playSound: true,
+          );
+          
+          final androidPlugin = _localNotifications
+              .resolvePlatformSpecificImplementation<
+                  AndroidFlutterLocalNotificationsPlugin>();
+          
+          if (androidPlugin != null) {
+            await androidPlugin.createNotificationChannel(channel);
+            _notificationChannelCreated = true;
+            log('✅ [NotificationHandler] Notification channel created before showing notification');
+            debugPrint('✅ [Notification] Channel created successfully');
+          } else {
+            log('⚠️ [NotificationHandler] Android plugin not available');
+            _notificationChannelCreated = true; // Not Android, continue
+          }
+        } catch (channelError) {
+          log('❌ [NotificationHandler] Failed to create channel before showing notification: $channelError');
+          debugPrint('❌ [Notification] Channel creation error: $channelError');
+          // Continue anyway - channel might already exist
+          _notificationChannelCreated = true; // Assume it exists or will be created by system
+        }
+      }
+      
       final bookingId = data['booking_id']?.toString() ?? '';
       final screen = data['screen']?.toString() ?? 'track_order';
       
       // Create payload for navigation
       final payload = '$bookingId|$screen';
 
-      // Android notification details (must match channel in AndroidManifest for tray visibility)
-      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'high_importance_channel',
+      // Android notification details (Importance.max + Priority.max + ticker for heads-up popup when app in foreground)
+      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'high_importance_channel', // CRITICAL: Must match channel ID
         'High Importance Notifications',
         channelDescription: 'This channel is used for important notifications.',
-        importance: Importance.high,
-        priority: Priority.high,
+        importance: Importance.max,
+        priority: Priority.max,
         showWhen: true,
         playSound: true,
         enableVibration: true,
         visibility: NotificationVisibility.public,
         fullScreenIntent: false,
+        ticker: title, // Helps show heads-up on some OEMs
       );
 
       // iOS notification details
@@ -586,13 +658,24 @@ class NotificationHandlerService {
       );
 
       // Combined notification details
-      const NotificationDetails notificationDetails = NotificationDetails(
+      final NotificationDetails notificationDetails = NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );
 
       // Use unique ID so each notification appears in tray (not overwritten)
       final int id = DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
+      
+      log('📱 [NotificationHandler] ==========================================');
+      log('📱 [NotificationHandler] ATTEMPTING TO SHOW FOREGROUND NOTIFICATION');
+      log('📱 [NotificationHandler] Title: $title');
+      log('📱 [NotificationHandler] Body: $body');
+      log('📱 [NotificationHandler] Channel created: $_notificationChannelCreated');
+      log('📱 [NotificationHandler] Notification ID: $id');
+      log('📱 [NotificationHandler] Payload: $payload');
+      debugPrint('📱 [Notification] Showing foreground notification: $title');
+      
+      // CRITICAL: Show the notification
       await _localNotifications.show(
         id,
         title,
@@ -601,9 +684,59 @@ class NotificationHandlerService {
         payload: payload,
       );
 
-      log('✅ [NotificationHandler] System notification shown: $title');
-    } catch (e) {
-      log('❌ [NotificationHandler] Error showing system notification: $e');
+      log('✅ [NotificationHandler] ==========================================');
+      log('✅ [NotificationHandler] System notification shown successfully!');
+      log('✅ [NotificationHandler] Title: $title');
+      log('✅ [NotificationHandler] ID: $id');
+      debugPrint('✅ [Notification] ✅✅✅ FOREGROUND NOTIFICATION DISPLAYED ✅✅✅');
+      debugPrint('✅ [Notification] Title: $title, Body: $body');
+    } catch (e, stackTrace) {
+      log('❌ [NotificationHandler] ==========================================');
+      log('❌ [NotificationHandler] ERROR SHOWING SYSTEM NOTIFICATION');
+      log('❌ [NotificationHandler] Error: $e');
+      log('❌ [NotificationHandler] Stack trace: $stackTrace');
+      debugPrint('❌ [Notification] Failed to show foreground notification: $e');
+      debugPrint('❌ [Notification] Error details: $stackTrace');
+      
+      // Try to show notification again with a delay (sometimes helps with timing issues)
+      try {
+        log('🔄 [NotificationHandler] Retrying notification display after delay...');
+        debugPrint('🔄 [Notification] Retrying after 500ms delay...');
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        final bookingId = data['booking_id']?.toString() ?? '';
+        final screen = data['screen']?.toString() ?? 'track_order';
+        final payload = '$bookingId|$screen';
+        final int id = DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
+        
+        final NotificationDetails retryDetails = NotificationDetails(
+          android: AndroidNotificationDetails(
+            'high_importance_channel',
+            'High Importance Notifications',
+            channelDescription: 'This channel is used for important notifications.',
+            importance: Importance.max,
+            priority: Priority.max,
+            showWhen: true,
+            playSound: true,
+            enableVibration: true,
+            visibility: NotificationVisibility.public,
+            ticker: title,
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        );
+        
+        await _localNotifications.show(id, title, body, retryDetails, payload: payload);
+        log('✅ [NotificationHandler] Notification shown successfully on retry');
+        debugPrint('✅ [Notification] Retry successful!');
+      } catch (retryError, retryStack) {
+        log('❌ [NotificationHandler] Retry also failed: $retryError');
+        log('❌ [NotificationHandler] Retry stack: $retryStack');
+        debugPrint('❌ [Notification] Retry failed: $retryError');
+      }
     }
   }
 

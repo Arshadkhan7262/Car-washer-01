@@ -62,19 +62,20 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         'high_importance_channel',
         'High Importance Notifications',
         description: 'This channel is used for important notifications.',
-        importance: Importance.high,
+        importance: Importance.max,
         playSound: true,
       );
       await plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(channel);
-      const details = AndroidNotificationDetails(
+      final details = AndroidNotificationDetails(
         'high_importance_channel',
         'High Importance Notifications',
         channelDescription: 'This channel is used for important notifications.',
-        importance: Importance.high,
-        priority: Priority.high,
+        importance: Importance.max,
+        priority: Priority.max,
         playSound: true,
         enableVibration: true,
         visibility: NotificationVisibility.public,
+        ticker: title,
       );
       final bookingId = message.data['booking_id']?.toString() ?? '';
       final screen = message.data['screen']?.toString() ?? 'track_order';
@@ -251,7 +252,7 @@ class _MyAppState extends State<MyApp> {
     log('🔄 [MyApp] Starting notification initialization...');
     
     try {
-      await Future.delayed(const Duration(milliseconds: 100)); // yield to UI
+      await Future.delayed(Duration.zero); // start as soon as possible
       log('🔄 [MyApp] Initializing NotificationController (permanent)...');
       Get.put(NotificationController(), permanent: true);
       log('✅ [MyApp] NotificationController initialized');

@@ -51,7 +51,7 @@ class DashboardScreen extends GetView<DashboardController> {
     // const Color barColor = Color(0xFF0B0D13);
     // const Color selectedColor = Color(0xFF8DA2FF);
     // const Color unselectedColor = Color(0xFFB8BDCA);
-     Color pillColor = Theme.of(context).brightness == Brightness.dark?  DarkTheme.primary.withValues(alpha: 0.13):Color(0xFF151B2B).withValues(alpha: 0.13,);
+     Color pillColor = Theme.of(context).brightness == Brightness.dark ? DarkTheme.primary.withValues(alpha: 0.13) : Color(0xFF151B2B).withValues(alpha: 0.13);
 
     return Container(
       decoration: BoxDecoration(

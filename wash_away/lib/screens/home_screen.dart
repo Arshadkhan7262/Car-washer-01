@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:wash_away/screens/book_screen.dart';
+import 'package:wash_away/screens/notification_screen.dart';
 import 'package:wash_away/widgets/service_card_widget.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/book_controller.dart';
+import '../controllers/profile_controller.dart';
+import '../features/notifications/controllers/notification_controller.dart';
 import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
 
@@ -60,17 +63,85 @@ class HomeScreen extends GetView<HomeController> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Muhammad',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Obx(() {
+                                final profileController = Get.isRegistered<ProfileController>()
+                                    ? Get.find<ProfileController>()
+                                    : Get.put(ProfileController());
+                                final userName = profileController.userName.value.isNotEmpty
+                                    ? profileController.userName.value
+                                    : 'User';
+                                return Text(
+                                  userName,
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              }),
+                            ],
+                          ),
                         ),
-                        const Icon(
-                          Icons.notifications_none,
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const NotificationScreen(),
+                              ),
+                            );
+                          },
+                          child: Obx(() {
+                            final notificationController = Get.isRegistered<NotificationController>()
+                                ? Get.find<NotificationController>()
+                                : Get.put(NotificationController());
+                            final unreadCount = notificationController.unreadCount.value;
+                            
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Icon(
+                                  Icons.notifications_none,
+                                  color: Theme.of(context).iconTheme.color,
+                                ),
+                                if (unreadCount > 0)
+                                  Positioned(
+                                    right: -4,
+                                    top: -4,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Theme.of(context).brightness == Brightness.dark
+                                              ? DarkTheme.card
+                                              : LightTheme.card,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 18,
+                                        minHeight: 18,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          unreadCount > 99 ? '99+' : unreadCount.toString(),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          }),
                         ),
                       ],
                     ),
