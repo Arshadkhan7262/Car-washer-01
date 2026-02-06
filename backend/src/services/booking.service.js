@@ -5,7 +5,7 @@ import Service from '../models/Service.model.js';
 import Washer from '../models/Washer.model.js';
 import AppError from '../errors/AppError.js';
 import * as couponService from './coupon.service.js';
-import { sendNotificationToUser } from './notification.service.js';
+import * as notificationService from './notification.service.js';
 
 /**
  * Generate unique booking ID
@@ -268,7 +268,7 @@ export const updateBooking = async (bookingId, updateData) => {
       const message = statusMessages[updateData.status];
       if (message) {
         const bookingId = booking.booking_id || booking._id.toString();
-        await sendNotificationToUser(
+        await notificationService.sendNotificationToUser(
           booking.customer_id.toString(),
           message.title,
           message.body,
@@ -321,7 +321,7 @@ export const updateBooking = async (bookingId, updateData) => {
         const bookingId = booking.booking_id || booking._id.toString();
         
         // Send notification to customer
-        await sendNotificationToUser(
+        await notificationService.sendNotificationToUser(
           booking.customer_id.toString(),
           'Washer Assigned',
           `${washer.name} has been assigned to your booking`,
@@ -336,12 +336,20 @@ export const updateBooking = async (bookingId, updateData) => {
         );
         console.log(`✅ Sent washer assigned notification to customer for booking ${bookingId}`);
         
-        // Send notification to washer
+        // Send notification to washer with detailed information
         if (washer.user_id) {
-          await sendNotificationToUser(
+          const customerName = booking.customer_name || 'Customer';
+          const serviceName = booking.service_name || 'Service';
+          const bookingDate = booking.booking_date ? new Date(booking.booking_date).toLocaleDateString() : '';
+          const timeSlot = booking.time_slot || '';
+          
+          const notificationTitle = 'New Job Assigned';
+          const notificationBody = `You have been assigned a new job: ${serviceName} for ${customerName}${bookingDate ? ` on ${bookingDate}` : ''}${timeSlot ? ` at ${timeSlot}` : ''}`;
+          
+          await notificationService.sendNotificationToUser(
             washer.user_id.toString(),
-            'New Job Assigned',
-            `You have been assigned a new job: ${bookingId}`,
+            notificationTitle,
+            notificationBody,
             {
               type: 'job_assigned',
               booking_id: bookingId,

@@ -420,6 +420,22 @@ class AuthService {
     return cachedStatus == 'suspended';
   }
 
+  /// Check if email is not verified (for OTP screen persistence)
+  Future<bool> isEmailNotVerified() async {
+    final prefs = await SharedPreferences.getInstance();
+    final accountCreated = prefs.getBool(_accountCreatedKey) ?? false;
+    final emailVerified = prefs.getBool(_emailVerifiedKey) ?? false;
+    final isLoggedIn = prefs.getBool(_isLoggedInKey) ?? false;
+    
+    // If account created but email not verified and not logged in, show OTP screen
+    if (accountCreated && !emailVerified && !isLoggedIn) {
+      log('📧 [isEmailNotVerified] Email not verified, should show OTP screen');
+      return true;
+    }
+    
+    return false;
+  }
+
   /// Logout user
   Future<void> logout() async {
     try {

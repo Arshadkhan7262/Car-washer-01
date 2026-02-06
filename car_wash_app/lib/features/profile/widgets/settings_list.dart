@@ -1,5 +1,6 @@
 import 'package:car_wash_app/util/images.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import '../../../theme/app_colors.dart';
 
@@ -9,7 +10,7 @@ class SettingsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 338,
+      height: Get.height * (300 / Get.height),
       // padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -46,13 +47,13 @@ class SettingsList extends StatelessWidget {
             AppImages.notification,
             Color(0xFFF6CB6FF).withOpacity(0.36),
           ),
-          _item(
-            Icons.language_rounded,
-            "Language",
-            AppImages.language,
-            Color(0xFFB84CD1).withOpacity(0.10),
-            trailing: "English",
-          ),
+          // _item(
+          //   Icons.language_rounded,
+          //   "Language",
+          //   AppImages.language,
+          //   Color(0xFFB84CD1).withOpacity(0.10),
+          //   trailing: "English",
+          // ),
           _item(
             Icons.shield_outlined,
             "Privacy & Security",

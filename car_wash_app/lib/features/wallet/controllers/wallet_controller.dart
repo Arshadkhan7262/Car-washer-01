@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../auth/services/auth_service.dart';
 import '../services/wallet_service.dart';
@@ -20,6 +21,8 @@ class WalletController extends GetxController {
   void onInit() {
     super.onInit();
     loadWalletData();
+    loadApprovedWithdrawal();
+    loadTransactions();
   }
 
   /// Load wallet data from API
@@ -74,9 +77,16 @@ class WalletController extends GetxController {
       if (stats != null) {
         earnings.value = (stats['earnings'] ?? 0).toDouble();
         jobsCompleted.value = stats['jobs_completed'] ?? 0;
+      } else {
+        // Reset to 0 if no stats available
+        earnings.value = 0.0;
+        jobsCompleted.value = 0;
       }
     } catch (e) {
       print('Error loading period stats: $e');
+      // Reset to 0 on error
+      earnings.value = 0.0;
+      jobsCompleted.value = 0;
     }
   }
 
@@ -84,27 +94,148 @@ class WalletController extends GetxController {
   void changePeriod(WalletPeriod period) {
     selectedPeriod.value = period;
     loadPeriodStats();
+    loadTransactions();
+  }
+
+  // Withdrawal limit
+  var withdrawalLimit = 2000.0.obs;
+
+  /// Get minimum withdrawal limit
+  Future<double?> getWithdrawalLimit() async {
+    try {
+      final limit = await _walletService.getWithdrawalLimit();
+      if (limit != null) {
+        withdrawalLimit.value = limit;
+      }
+      return limit;
+    } catch (e) {
+      print('Error fetching withdrawal limit: $e');
+      return null;
+    }
   }
 
   /// Request withdrawal
   Future<void> requestWithdrawal(double amount) async {
     try {
-      final success = await _walletService.requestWithdrawal(amount);
+      isLoading.value = true;
       
-      if (success) {
-        Get.snackbar("Success", "Withdrawal request sent successfully");
+      final result = await _walletService.requestWithdrawal(amount);
+      
+      if (result != null && result['success'] == true) {
+        Get.snackbar(
+          "Success",
+          "Withdrawal request sent successfully. Waiting for admin approval.",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.black,
+          duration: const Duration(seconds: 3),
+          margin: const EdgeInsets.all(16),
+          borderRadius: 8,
+        );
         // Refresh wallet data
         await loadWalletData();
       } else {
-        Get.snackbar("Error", "Failed to send withdrawal request");
+        final errorMsg = result?['error'] ?? 'Failed to send withdrawal request';
+        Get.snackbar(
+          "Error",
+          errorMsg,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.black,
+          duration: const Duration(seconds: 4),
+          margin: const EdgeInsets.all(16),
+          borderRadius: 8,
+        );
       }
     } catch (e) {
-      Get.snackbar("Error", "Failed to send withdrawal request: $e");
+      Get.snackbar(
+        "Error",
+        "Failed to send withdrawal request: ${e.toString()}",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.black,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(16),
+        borderRadius: 8,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Approved withdrawal
+  var approvedWithdrawal = Rx<Map<String, dynamic>?>(null);
+
+  /// Load approved withdrawal
+  Future<void> loadApprovedWithdrawal() async {
+    try {
+      final withdrawals = await _walletService.getWithdrawalHistory(status: 'approved');
+      if (withdrawals != null && withdrawals.isNotEmpty) {
+        approvedWithdrawal.value = withdrawals.first;
+      } else {
+        approvedWithdrawal.value = null;
+      }
+    } catch (e) {
+      print('Error loading approved withdrawal: $e');
+      approvedWithdrawal.value = null;
+    }
+  }
+
+  /// Process approved withdrawal
+  Future<bool> processApprovedWithdrawal(String withdrawalId) async {
+    try {
+      final result = await _walletService.processApprovedWithdrawal(withdrawalId);
+      if (result != null && result['success'] == true) {
+        approvedWithdrawal.value = null; // Clear approved withdrawal
+        await loadWalletData(); // Refresh balance
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Error processing withdrawal: $e');
+      return false;
+    }
+  }
+
+  // Transactions
+  var transactions = <Map<String, dynamic>>[].obs;
+  var isLoadingTransactions = false.obs;
+
+  /// Load transactions
+  Future<void> loadTransactions() async {
+    try {
+      isLoadingTransactions.value = true;
+      String period;
+      switch (selectedPeriod.value) {
+        case WalletPeriod.today:
+          period = 'today';
+          break;
+        case WalletPeriod.thisWeek:
+          period = 'week';
+          break;
+        case WalletPeriod.thisMonth:
+          period = 'month';
+          break;
+      }
+
+      final data = await _walletService.getTransactions(period: period);
+      if (data != null && data['transactions'] != null) {
+        transactions.value = List<Map<String, dynamic>>.from(data['transactions']);
+      } else {
+        transactions.value = [];
+      }
+    } catch (e) {
+      print('Error loading transactions: $e');
+      transactions.value = [];
+    } finally {
+      isLoadingTransactions.value = false;
     }
   }
   
   /// Refresh wallet data
   Future<void> refreshData() async {
     await loadWalletData();
+    await loadApprovedWithdrawal();
+    await loadTransactions();
   }
 }

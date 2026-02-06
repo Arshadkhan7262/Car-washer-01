@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/auth_controller.dart';
 import '../widgets/auth_button.dart';
+import '../services/auth_service.dart';
 
 class EmailOtpScreen extends StatefulWidget {
   const EmailOtpScreen({super.key});
@@ -24,12 +25,34 @@ class _EmailOtpScreenState extends State<EmailOtpScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeEmail();
+  }
+
+  Future<void> _initializeEmail() async {
     final args = Get.arguments as Map<String, dynamic>?;
     _isPasswordReset = args?['isPasswordReset'] ?? false;
-    final email = args?['email'] as String?;
+    final emailFromArgs = args?['email'] as String?;
+    final authController = Get.find<AuthController>();
+    
+    // Try to get email from arguments first (normal navigation)
+    String? email = emailFromArgs;
+    
+    // If not in arguments, try to get from SharedPreferences (app restart scenario)
+    if (email == null) {
+      final authService = AuthService();
+      email = await authService.getUserEmail();
+    }
+    
+    // Set email if found
     if (email != null) {
-      final authController = Get.find<AuthController>();
       authController.setEmail(email);
+    }
+    
+    // If app restarted and timer is 0, enable resend button
+    // Timer should only start when OTP is actually sent, not when screen is shown
+    // Timer is started in: registerWithEmail, requestPasswordReset, requestEmailOTP, resendEmailOTP
+    if (authController.resendTimer.value == 0) {
+      authController.canResend.value = true;
     }
   }
 
@@ -84,14 +107,32 @@ class _EmailOtpScreenState extends State<EmailOtpScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Center(
-                child: Text(
-                  "Enter your 4 digit OTP",
-                  style: TextStyle(
-                    color: Color(0xFF757575),
-                    fontSize: 14,
-                  ),
-                ),
+              Center(
+                child: Obx(() {
+                  final emailValue = authController.email.value;
+                  return Column(
+                    children: [
+                      const Text(
+                        "Enter your 4 digit OTP",
+                        style: TextStyle(
+                          color: Color(0xFF757575),
+                          fontSize: 14,
+                        ),
+                      ),
+                      if (emailValue != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          "Sent to: $emailValue",
+                          style: const TextStyle(
+                            color: Color(0xFF031E3D),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                }),
               ),
               const SizedBox(height: 40),
               // OTP Input Fields
@@ -102,7 +143,10 @@ class _EmailOtpScreenState extends State<EmailOtpScreen> {
                   (index) => SizedBox(
                     width: 60,
                     height: 60,
-                    child: TextField(
+                    child: Builder(
+                      builder: (context) {
+                        final hasValue = _controllers[index].text.isNotEmpty;
+                        return TextField(
                       controller: _controllers[index],
                       focusNode: _focusNodes[index],
                       textAlign: TextAlign.center,
@@ -119,11 +163,17 @@ class _EmailOtpScreenState extends State<EmailOtpScreen> {
                         fillColor: const Color(0xFFF1F5F9),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                              borderSide: const BorderSide(
+                                color: Color(0xFFCBD5E1),
+                                width: 1.5,
+                              ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                              borderSide: BorderSide(
+                                color: hasValue ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                                width: hasValue ? 2 : 1.5,
+                              ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -133,35 +183,106 @@ class _EmailOtpScreenState extends State<EmailOtpScreen> {
                           ),
                         ),
                       ),
-                      onChanged: (value) => _onChanged(index, value),
+                          onChanged: (value) {
+                            setState(() {}); // Trigger rebuild to update border color
+                            _onChanged(index, value);
+                          },
+                        );
+                      },
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 32),
               // Resend OTP
-              Obx(() => authController.canResend.value
+              Obx(() {
+                final isLoading = authController.isSendingOTP.value;
+                final timerValue = authController.resendTimer.value;
+                final canResend = authController.canResend.value;
+                
+                // Show resend button if: timer is 0 (app restarted or timer expired) OR canResend is true
+                // Show timer button only if: timer is running (timer > 0)
+                final showResendButton = timerValue == 0 || canResend;
+                
+                return showResendButton
                   ? Center(
-                      child: TextButton(
-                        onPressed: () => authController.resendEmailOTP(),
-                        child: const Text(
-                          "Resend OTP",
+                        child: InkWell(
+                          onTap: isLoading ? null : () => authController.resendEmailOTP(),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isLoading 
+                                    ? const Color(0xFFCBD5E1) 
+                                    : const Color(0xFF031E3D),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isLoading)
+                                  const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF031E3D)),
+                                    ),
+                                  )
+                                else
+                                  const Icon(
+                                    Icons.refresh,
+                                    color: Color(0xFF031E3D),
+                                    size: 18,
+                                  ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  isLoading ? "Sending..." : "Resend OTP",
                           style: TextStyle(
-                            color: Color(0xFF031E3D),
+                                    color: isLoading 
+                                        ? const Color(0xFF757575) 
+                                        : const Color(0xFF031E3D),
                             fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                           ),
                         ),
                       ),
                     )
                   : Center(
-                      child: Text(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: const Color(0xFFF1F5F9),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.access_time,
+                              color: Color(0xFF757575),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
                         "Resend OTP in ${authController.formattedTimer}",
                         style: const TextStyle(
                           color: Color(0xFF757575),
                           fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    )),
+                    );
+              }),
               const SizedBox(height: 32),
               // Error Message
               Obx(() => authController.errorMessage.value.isNotEmpty

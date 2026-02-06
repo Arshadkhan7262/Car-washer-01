@@ -18,6 +18,7 @@ import washerJobsRoutes from './washerJobs.routes.js';
 import washerWalletRoutes from './washerWallet.routes.js';
 import washerProfileRoutes from './washerProfile.routes.js';
 import washerLocationRoutes from './washerLocation.routes.js';
+import washerNotificationRoutes from './washerNotification.routes.js';
 
 const router = express.Router();
 
@@ -52,7 +53,6 @@ router.use('/washer/jobs', washerJobsRoutes); // Jobs screen: job management
 router.use('/washer/wallet', washerWalletRoutes); // Wallet screen: balance, transactions, withdrawals
 router.use('/washer/profile', washerProfileRoutes); // Profile screen: profile data and updates
 router.use('/washer/location', washerLocationRoutes); // Location: update and get washer location
-import washerNotificationRoutes from './washerNotification.routes.js';
 router.use('/washer/notifications', washerNotificationRoutes); // Notifications: FCM token management
 
 // Customer App (wash_away) Screen-specific API routes
@@ -90,6 +90,17 @@ router.use('/admin/vehicle-types', vehicleTypeRoutes); // Vehicle types: admin C
 // Stripe Payment routes
 import stripePaymentRoutes from './stripePayment.routes.js';
 router.use('/stripe', stripePaymentRoutes); // Stripe payment endpoints
+
+// Withdrawal routes
+import withdrawalRoutes from './withdrawal.routes.js';
+router.use('/washer/withdrawal', withdrawalRoutes); // Washer withdrawal requests
+router.use('/admin/withdrawal', withdrawalRoutes); // Admin withdrawal management
+
+// Banner routes
+import bannerRoutes from './banner.routes.js';
+import customerBannerRoutes from './customerBanner.routes.js';
+router.use('/admin/settings/banners', bannerRoutes); // Admin banner management
+router.use('/customer/banners', customerBannerRoutes); // Customer banner listing (public)
 
 export default router;
 

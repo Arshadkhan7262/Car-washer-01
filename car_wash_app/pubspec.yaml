@@ -79,6 +79,10 @@ dependencies:
   # Permission handler
   permission_handler: ^11.0.1
 
+  # Stripe Payment Integration
+  flutter_stripe: ^11.1.0
+  credit_card_validator: ^2.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

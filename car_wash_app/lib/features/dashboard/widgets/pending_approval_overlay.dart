@@ -2,7 +2,12 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import '../../auth/services/auth_service.dart';
+import '../../home/controllers/home_controller.dart';
+import '../../jobs/controllers/jobs_controller.dart';
+import '../../wallet/controllers/wallet_controller.dart';
+import '../../profile/controllers/profile_controller.dart';
 
 class PendingApprovalOverlay extends StatefulWidget {
   const PendingApprovalOverlay({super.key});
@@ -87,6 +92,9 @@ class _PendingApprovalOverlayState extends State<PendingApprovalOverlay>
           _pollingTimer?.cancel();
           _animationController.stop();
 
+          // Refresh all app data when account is approved
+          await _refreshAllAppData();
+
           // Wait a moment then hide overlay
           await Future.delayed(const Duration(milliseconds: 500));
           if (mounted) {
@@ -122,6 +130,37 @@ class _PendingApprovalOverlayState extends State<PendingApprovalOverlay>
           _isChecking = false;
         });
       }
+    }
+  }
+
+  /// Refresh all app data when account is approved
+  Future<void> _refreshAllAppData() async {
+    try {
+      // Refresh profile data
+      if (Get.isRegistered<ProfileController>()) {
+        final profileController = Get.find<ProfileController>();
+        await profileController.refreshProfile();
+      }
+      
+      // Refresh home data
+      if (Get.isRegistered<HomeController>()) {
+        final homeController = Get.find<HomeController>();
+        homeController.loadDashboardData();
+      }
+      
+      // Refresh jobs data
+      if (Get.isRegistered<JobController>()) {
+        final jobController = Get.find<JobController>();
+        jobController.fetchJobs();
+      }
+      
+      // Refresh wallet data
+      if (Get.isRegistered<WalletController>()) {
+        final walletController = Get.find<WalletController>();
+        walletController.loadWalletData();
+      }
+    } catch (e) {
+      log('⚠️ Error refreshing app data: $e');
     }
   }
 

@@ -1,5 +1,7 @@
 import 'package:get/get.dart';
+import 'package:flutter/material.dart';
 import '../../auth/services/auth_service.dart';
+import '../../home/controllers/home_controller.dart';
 import '../services/profile_service.dart';
 
 class ProfileController extends GetxController {
@@ -7,7 +9,8 @@ class ProfileController extends GetxController {
   final ProfileService _profileService = ProfileService();
   
   // Observable status matching the toggle on Home/Profile
-  var isOnline = false.obs;
+  // Default to true - user should be online by default
+  var isOnline = true.obs;
   var isLoading = true.obs;
 
   // Profile Data
@@ -73,7 +76,14 @@ class ProfileController extends GetxController {
       if (cachedEmail != null) {
         email.value = cachedEmail;
       }
-      Get.snackbar("Error", "Failed to load profile: ${e.toString()}");
+      Get.snackbar(
+        "Error",
+        "Failed to load profile: ${e.toString()}",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
     } finally {
       isLoading.value = false;
     }
@@ -87,17 +97,38 @@ class ProfileController extends GetxController {
     if (user != null) {
       userName.value = user['name'] ?? profileData['name'] ?? '';
       email.value = user['email'] ?? profileData['email'] ?? '';
-      phone.value = user['phone'] ?? '';
+      // Try multiple sources for phone number
+      phone.value = user['phone'] ?? 
+                    washer?['phone'] ?? 
+                    profileData['phone'] ?? 
+                    '';
       walletBalance.value = (user['wallet_balance'] ?? 0).toDouble();
     } else {
       // Fallback to direct fields if user object doesn't exist
       userName.value = profileData['name'] ?? '';
       email.value = profileData['email'] ?? '';
+      // Try to get phone from washer or direct fields
+      phone.value = washer?['phone'] ?? 
+                    profileData['phone'] ?? 
+                    '';
     }
+    
+    // Update HomeController with washer name if available
+    _updateHomeControllerName();
     
     // Extract washer data
     if (washer != null) {
-      isOnline.value = washer['online_status'] ?? false;
+      // Use API value if available, otherwise default to true (online)
+      final onlineStatusFromAPI = washer['online_status'];
+      final accountStatus = washer['status'];
+      
+      // If account is active and online_status is false/null, default to true
+      if (accountStatus == 'active' && (onlineStatusFromAPI == null || onlineStatusFromAPI == false)) {
+        isOnline.value = true;
+      } else {
+        isOnline.value = onlineStatusFromAPI ?? true;
+      }
+      
       userRating.value = (washer['rating'] ?? 0).toDouble();
       totalJobs.value = washer['total_jobs'] ?? 0;
       completedJobs.value = washer['completed_jobs'] ?? 0;
@@ -105,7 +136,9 @@ class ProfileController extends GetxController {
     } else if (profileData['status'] != null) {
       // If only status is available (from check-status endpoint)
       // Set default values for pending accounts
-      isOnline.value = false;
+      final accountStatus = profileData['status'];
+      // Default to online for active accounts, offline for pending/suspended
+      isOnline.value = accountStatus == 'active' ? true : false;
       userRating.value = 0.0;
       totalJobs.value = 0;
       completedJobs.value = 0;
@@ -120,10 +153,24 @@ class ProfileController extends GetxController {
       if (success) {
         isOnline.value = value;
       } else {
-        Get.snackbar("Error", "Failed to update online status");
+        Get.snackbar(
+          "Error",
+          "Failed to update online status",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
       }
     } catch (e) {
-      Get.snackbar("Error", "Failed to update online status: $e");
+      Get.snackbar(
+        "Error",
+        "Failed to update online status: $e",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
     }
   }
 
@@ -134,5 +181,15 @@ class ProfileController extends GetxController {
   
   Future<void> refreshProfile() async {
     await loadProfile();
+  }
+  
+  /// Update HomeController with washer name
+  void _updateHomeControllerName() {
+    if (userName.value.isNotEmpty) {
+      if (Get.isRegistered<HomeController>()) {
+        final homeController = Get.find<HomeController>();
+        homeController.washerName.value = userName.value;
+      }
+    }
   }
 }

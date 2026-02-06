@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../profile/screens/profile_screen.dart';
@@ -105,10 +106,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       body: Obx(
-        () => IndexedStack(
-          index: controller.currentIndex.value,
-          children: screens,
-        ),
+        () {
+          final isPending = controller.isPendingApproval.value;
+          return Stack(
+            children: [
+              IndexedStack(
+                index: controller.currentIndex.value,
+                children: screens,
+              ),
+              // Blur effect when pending
+              if (isPending)
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Container(
+                      color: Colors.black.withOpacity(0.3),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
       bottomNavigationBar: Obx(
         () => BottomNavigationBar(

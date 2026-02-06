@@ -10,6 +10,7 @@ import routes from './src/routes/index.routes.js';
 import getStripeInstance from './src/config/stripe.config.js';
 // Initialize Firebase Admin SDK early (required for notifications)
 import './src/config/firebase.config.js';
+import apiLogger from './src/middleware/apiLogger.js';
 
 // Load environment variables from backend/.env (same dir as server.js)
 dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.env') });
@@ -22,6 +23,9 @@ const app = express();
 // Middleware
 app.use(cors());
 
+// Trust proxy for accurate IP detection (needed for ngrok, reverse proxies, etc.)
+app.set('trust proxy', true);
+
 // Stripe webhook needs raw body for signature verification
 // Must be before express.json() middleware
 app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
@@ -33,64 +37,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Enhanced Request logging middleware
-app.use((req, res, next) => {
-  const startTime = Date.now();
-  const timestamp = new Date().toISOString();
-  
-  // Log incoming request
-  console.log(`\n📥 [${timestamp}] ${req.method} ${req.originalUrl || req.url}`);
-  console.log(`   IP: ${req.ip || req.connection.remoteAddress || 'unknown'}`);
-  
-  // Log request body (if present and not too large)
-  if (req.body && Object.keys(req.body).length > 0) {
-    const bodyStr = JSON.stringify(req.body);
-    if (bodyStr.length < 500) {
-      console.log(`   Body: ${bodyStr}`);
-    } else {
-      console.log(`   Body: [Large payload - ${bodyStr.length} chars]`);
-    }
-  }
-  
-  // Log query parameters (if present)
-  if (req.query && Object.keys(req.query).length > 0) {
-    console.log(`   Query: ${JSON.stringify(req.query)}`);
-  }
-  
-  // Log response when it finishes (only once)
-  let responseLogged = false;
-  
-  const logResponse = () => {
-    if (responseLogged) return;
-    responseLogged = true;
-    
-    const duration = Date.now() - startTime;
-    const statusCode = res.statusCode;
-    const statusEmoji = statusCode >= 200 && statusCode < 300 ? '✅' : 
-                        statusCode >= 400 && statusCode < 500 ? '⚠️' : 
-                        statusCode >= 500 ? '❌' : 'ℹ️';
-    
-    console.log(`${statusEmoji} [${new Date().toISOString()}] ${req.method} ${req.originalUrl || req.url} - ${statusCode} (${duration}ms)`);
-  };
-  
-  const originalSend = res.send;
-  const originalJson = res.json;
-  
-  res.send = function(data) {
-    logResponse();
-    return originalSend.call(this, data);
-  };
-  
-  res.json = function(data) {
-    logResponse();
-    return originalJson.call(this, data);
-  };
-  
-  // Also log on finish event (for cases where send/json might not be called)
-  res.on('finish', logResponse);
-  
-  next();
-});
+// Global API Request Logger Middleware
+// Must be registered before routes to log all API requests
+app.use('/api/v1', apiLogger);
 
 // Routes
 app.use('/api/v1', routes);
@@ -169,20 +118,6 @@ process.on('uncaughtException', (err) => {
 });
 
 startServer();
-
-// Handle unhandled promise rejections (don't exit - log and continue)
-process.on('unhandledRejection', (err) => {
-  console.error('❌ UNHANDLED REJECTION:', err);
-  console.error('Stack:', err.stack);
-  // Don't exit - let server continue, but log the error
-});
-
-// Handle uncaught exceptions (don't exit - log and continue)
-process.on('uncaughtException', (err) => {
-  console.error('❌ UNCAUGHT EXCEPTION:', err);
-  console.error('Stack:', err.stack);
-  // Don't exit - let server continue, but log the error
-});
 
 
 

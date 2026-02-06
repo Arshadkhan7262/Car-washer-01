@@ -50,10 +50,10 @@ export default function Layout() {
 
       {/* Mobile sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 w-64",
+        "fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 w-64 flex flex-col",
         mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="h-16 flex items-center justify-between border-b border-slate-800 px-4 bg-slate-900">
+        <div className="flex-shrink-0 h-16 flex items-center justify-between border-b border-slate-800 px-4 bg-slate-900">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
               <span className="text-white text-sm">🚗</span>
@@ -64,11 +64,13 @@ export default function Layout() {
             ✕
           </button>
         </div>
-        <Sidebar 
-          currentPage={currentPageName}
-          collapsed={false}
-          onToggle={() => setMobileMenuOpen(false)}
-        />
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Sidebar 
+            currentPage={currentPageName}
+            collapsed={false}
+            onToggle={() => setMobileMenuOpen(false)}
+          />
+        </div>
       </div>
 
       {/* Main content */}

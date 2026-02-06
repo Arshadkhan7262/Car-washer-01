@@ -6,7 +6,9 @@ import '../features/services/services/service_service.dart';
 import '../features/vehicles/services/vehicle_type_service.dart';
 import '../models/service_model.dart';
 import '../models/vehicle_type_model.dart';
+import '../models/banner_model.dart' as banner_model;
 import '../services/location_service.dart';
+import '../services/banner_service.dart';
 import '../features/notifications/controllers/fcm_token_controller.dart';
 
 class HomeController extends GetxController {
@@ -37,6 +39,12 @@ class HomeController extends GetxController {
   final RxList<VehicleType> vehicleTypes = <VehicleType>[].obs;
   final RxBool isLoadingVehicleTypes = false.obs;
   final RxString vehicleTypesError = ''.obs;
+
+  // Banners state
+  final BannerService _bannerService = BannerService();
+  final RxList<banner_model.Banner> banners = <banner_model.Banner>[].obs;
+  final RxBool isLoadingBanners = false.obs;
+  final RxString bannersError = ''.obs;
 
   // Location state
   final LocationService _locationService = LocationService();
@@ -75,23 +83,36 @@ class HomeController extends GetxController {
 
     // Delay timer start until PageView is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Start auto-slide timer only after PageView is attached
-      autoSlideTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-        // Check if PageController is attached before animating
-        if (pageController.hasClients) {
-          final nextPage = (currentPage.value + 1) % 3;
-          pageController.animateToPage(
-            nextPage,
-            duration: const Duration(milliseconds: 350),
-            curve: Curves.easeInOut,
-          );
+      // Start auto-slide timer only after PageView is built
+      // Update timer when banners change
+      void updateTimer() {
+        autoSlideTimer?.cancel();
+        final bannerCount = banners.isEmpty ? 3 : banners.length;
+        if (bannerCount > 0 && pageController.hasClients) {
+          autoSlideTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+            if (pageController.hasClients) {
+              final nextPage = (currentPage.value + 1) % bannerCount;
+              pageController.animateToPage(
+                nextPage,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeInOut,
+              );
+            }
+          });
         }
-      });
+      }
+      
+      // Initial timer setup
+      updateTimer();
+      
+      // Update timer when banners change
+      ever(banners, (_) => updateTimer());
     });
 
-    // Fetch services and vehicle types on init
+    // Fetch services, vehicle types, and banners on init
     fetchServices();
     fetchVehicleTypes();
+    fetchBanners();
     
     // Fetch current location on init
     fetchCurrentLocation();
@@ -267,6 +288,27 @@ class HomeController extends GetxController {
         'Failed to get location: ${e.toString()}',
         snackPosition: SnackPosition.BOTTOM,
         duration: const Duration(seconds: 3),
+      );
+    }
+  }
+
+  /// Fetch banners from API
+  Future<void> fetchBanners() async {
+    try {
+      isLoadingBanners.value = true;
+      bannersError.value = '';
+
+      final fetchedBanners = await _bannerService.getActiveBanners();
+      banners.value = fetchedBanners;
+
+      isLoadingBanners.value = false;
+    } catch (e) {
+      isLoadingBanners.value = false;
+      bannersError.value = e.toString();
+      Get.snackbar(
+        'Error',
+        'Failed to load banners: ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
       );
     }
   }

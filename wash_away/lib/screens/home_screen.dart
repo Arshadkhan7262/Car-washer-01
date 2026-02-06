@@ -5,6 +5,7 @@ import 'package:wash_away/screens/book_screen.dart';
 import 'package:wash_away/widgets/service_card_widget.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/book_controller.dart';
+import '../models/banner_model.dart' as banner_model;
 import '../themes/dark_theme.dart';
 import '../themes/light_theme.dart';
 
@@ -235,31 +236,61 @@ class HomeScreen extends GetView<HomeController> {
 
                 const SizedBox(height: 15),
       
-                // --- Onboarding/Image Scroller (Image 3) ---
-                Padding(
-                  padding: const EdgeInsets.all(5.0),
-                  child: SizedBox(
-                    height: 200,
+                // --- Banner Scroller (Image 3) ---
+                Obx(() {
+                  if (controller.isLoadingBanners.value) {
+                    return const Padding(
+                      padding: EdgeInsets.all(5.0),
+                      child: SizedBox(
+                        height: 200,
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    );
+                  }
 
-                    child: PageView(
-                      controller: controller.pageController,
-                      children: [
-                        _buildImageListItem('assets/images/gift.png'),
-                        _buildImageListItem('assets/images/gift.png'),
-                        _buildImageListItem('assets/images/gift.png'),
-                      ],
+                  if (controller.banners.isEmpty) {
+                    // Fallback to default banners if API returns empty
+                    return Padding(
+                      padding: const EdgeInsets.all(5.0),
+                      child: SizedBox(
+                        height: 200,
+                        child: PageView(
+                          controller: controller.pageController,
+                          children: [
+                            _buildImageListItem('assets/images/gift.png'),
+                            _buildImageListItem('assets/images/gift.png'),
+                            _buildImageListItem('assets/images/gift.png'),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.all(5.0),
+                    child: SizedBox(
+                      height: 200,
+                      child: PageView(
+                        controller: controller.pageController,
+                        children: controller.banners.map((banner) {
+                          return _buildBannerItem(banner);
+                        }).toList(),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                }),
                 const SizedBox(height: 8),
       
-                // Onboarding Dots Indicator (Image 3)
-                Obx(() => Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(3, (index) {
-                    return _buildDotIndicator(controller, index, 3);
-                  }),
-                )),
+                // Banner Dots Indicator
+                Obx(() {
+                  final bannerCount = controller.banners.isEmpty ? 3 : controller.banners.length;
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(bannerCount, (index) {
+                      return _buildDotIndicator(controller, index, bannerCount);
+                    }),
+                  );
+                }),
                 SizedBox(height: 8,),
 
                 Row(
@@ -751,7 +782,130 @@ class HomeScreen extends GetView<HomeController> {
     );
   }
 
-  // Widget for the horizontal image list (Image 3 content)
+  // Widget for banner item from API
+  Widget _buildBannerItem(banner_model.Banner banner) {
+    return GestureDetector(
+      onTap: () {
+        // Handle banner tap based on action_type
+        if (banner.actionType == 'service' && banner.actionValue != null) {
+          // Navigate to service
+          Navigator.push(
+            Get.context!,
+            MaterialPageRoute(builder: (context) => BookScreen()),
+          );
+        } else if (banner.actionType == 'coupon' && banner.actionValue != null) {
+          // Navigate to coupon/booking screen
+          Navigator.push(
+            Get.context!,
+            MaterialPageRoute(builder: (context) => BookScreen()),
+          );
+        } else if (banner.actionType == 'url' && banner.actionValue != null) {
+          // Open external URL
+          // You can use url_launcher package here
+        }
+      },
+      child: Container(
+        width: 320,
+        height: 200,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Banner Image
+              banner.imageUrl.isNotEmpty
+                  ? Image.network(
+                      banner.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.image_not_supported, size: 50),
+                        );
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        );
+                      },
+                    )
+                  : Container(
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.image_not_supported, size: 50),
+                    ),
+              // Gradient overlay for text readability
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.7),
+                      ],
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (banner.title.isNotEmpty)
+                        Text(
+                          banner.title,
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      if (banner.subtitle != null && banner.subtitle!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          banner.subtitle!,
+                          style: GoogleFonts.inter(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 14,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Widget for the horizontal image list (Image 3 content) - Fallback
   Widget _buildImageListItem(String imagePath) {
     return Container(
       width: 320,

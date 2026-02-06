@@ -7,6 +7,8 @@ import '../services/jobs_service.dart';
 import '../services/location_tracker.dart';
 import '../../home/controllers/home_controller.dart';
 import '../../jobs/controllers/jobs_controller.dart';
+import '../../wallet/controllers/wallet_controller.dart';
+import '../../profile/controllers/profile_controller.dart';
 
 class JobDetailController extends GetxController {
   final String jobId;
@@ -431,6 +433,18 @@ class JobDetailController extends GetxController {
         if (Get.isRegistered<HomeController>()) {
           final homeController = Get.find<HomeController>();
           await homeController.loadDashboardData();
+        }
+        
+        // Refresh wallet data to show updated balance and earnings
+        if (Get.isRegistered<WalletController>()) {
+          final walletController = Get.find<WalletController>();
+          await walletController.loadWalletData();
+        }
+        
+        // Refresh profile data to update wallet balance
+        if (Get.isRegistered<ProfileController>()) {
+          final profileController = Get.find<ProfileController>();
+          await profileController.refreshProfile();
         }
       } else {
         // Revert optimistic update on failure

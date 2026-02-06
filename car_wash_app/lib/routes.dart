@@ -9,6 +9,7 @@ import 'features/profile/screens/profile_screen.dart';
 import 'features/wallet/wallet_screen.dart';
 import 'features/wallet/wallet_binding.dart';
 import 'features/profile/profile_binding.dart';
+import 'features/auth/screens/splash_screen.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/signup_screen.dart';
 import 'features/auth/screens/reset_password_screen.dart';
@@ -18,6 +19,7 @@ import 'features/auth/auth_binding.dart';
 /// Application Routes
 class AppRoutes {
   // Route names
+  static const String splash = '/splash';
   static const String login = '/login';
   static const String signup = '/signup';
   static const String resetPassword = '/reset-password';
@@ -28,12 +30,17 @@ class AppRoutes {
   static const String wallet = '/wallet';
   static const String profile = '/profile';
 
-  // Initial route - check if logged in, otherwise show login
-  static const String initial = login;
+  // Initial route - splash screen checks login status
+  static const String initial = splash;
 
   /// Get all routes
   static List<GetPage> getRoutes() {
     return [
+      // Splash screen - checks login status and navigates
+      GetPage(
+        name: splash,
+        page: () => const SplashScreen(),
+      ),
       // Authentication routes - All auth screens need AuthController
       GetPage(
         name: login,

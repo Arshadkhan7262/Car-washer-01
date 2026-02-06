@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 import PageHeader from '@/components/Components/ui/PageHeader.jsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,8 @@ export default function Content() {
   const queryClient = useQueryClient();
   const [showBannerModal, setShowBannerModal] = useState(false);
   const [editingBanner, setEditingBanner] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [bannerForm, setBannerForm] = useState({
     title: '', subtitle: '', image_url: '', action_type: 'none',
     action_value: '', display_order: 0, start_date: '', end_date: '', is_active: true
@@ -60,19 +63,35 @@ export default function Content() {
   });
 
   const bannerMutation = useMutation({
-    mutationFn: (data) => editingBanner 
-      ? base44.entities.Banner.update(editingBanner.id, data)
-      : base44.entities.Banner.create(data),
+    mutationFn: (formData) => editingBanner 
+      ? base44.entities.Banner.update(editingBanner.id, formData)
+      : base44.entities.Banner.create(formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['banners'] });
       closeBannerModal();
+      toast.success(editingBanner ? 'Banner updated successfully' : 'Banner created successfully');
+    },
+    onError: (error) => {
+      toast.error(`Failed to ${editingBanner ? 'update' : 'create'} banner: ${error.message || 'Unknown error'}`);
     }
   });
 
   const deleteBannerMutation = useMutation({
     mutationFn: (id) => base44.entities.Banner.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['banners'] })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['banners'] });
+      toast.success('Banner deleted successfully');
+    },
+    onError: (error) => {
+      toast.error(`Failed to delete banner: ${error.message || 'Unknown error'}`);
+    }
   });
+
+  const handleDeleteBanner = (banner) => {
+    if (window.confirm(`Are you sure you want to delete "${banner.title}"?`)) {
+      deleteBannerMutation.mutate(banner.id);
+    }
+  };
 
   const sendNotificationMutation = useMutation({
     mutationFn: (data) => base44.notifications.send(data),
@@ -104,16 +123,20 @@ export default function Content() {
         action_type: banner.action_type || 'none',
         action_value: banner.action_value || '',
         display_order: banner.display_order || 0,
-        start_date: banner.start_date || '',
-        end_date: banner.end_date || '',
+        start_date: banner.start_date ? banner.start_date.split('T')[0] : '',
+        end_date: banner.end_date ? banner.end_date.split('T')[0] : '',
         is_active: banner.is_active !== false
       });
+      setImagePreview(banner.image_url || null);
+      setSelectedImage(null);
     } else {
       setEditingBanner(null);
       setBannerForm({
         title: '', subtitle: '', image_url: '', action_type: 'none',
         action_value: '', display_order: 0, start_date: '', end_date: '', is_active: true
       });
+      setImagePreview(null);
+      setSelectedImage(null);
     }
     setShowBannerModal(true);
   };
@@ -121,6 +144,53 @@ export default function Content() {
   const closeBannerModal = () => {
     setShowBannerModal(false);
     setEditingBanner(null);
+    setImagePreview(null);
+    setSelectedImage(null);
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+      // Clear image_url when file is selected
+      setBannerForm({ ...bannerForm, image_url: '' });
+    }
+  };
+
+  const handleBannerSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!bannerForm.title) {
+      toast.error('Title is required');
+      return;
+    }
+
+    if (!selectedImage && !bannerForm.image_url) {
+      toast.error('Either upload an image or provide an image URL');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('title', bannerForm.title);
+    if (bannerForm.subtitle) formData.append('subtitle', bannerForm.subtitle);
+    if (bannerForm.image_url && !selectedImage) formData.append('image_url', bannerForm.image_url);
+    formData.append('action_type', bannerForm.action_type);
+    if (bannerForm.action_value) formData.append('action_value', bannerForm.action_value);
+    formData.append('display_order', bannerForm.display_order.toString());
+    if (bannerForm.start_date) formData.append('start_date', bannerForm.start_date);
+    if (bannerForm.end_date) formData.append('end_date', bannerForm.end_date);
+    formData.append('is_active', bannerForm.is_active.toString());
+    
+    if (selectedImage) {
+      formData.append('image', selectedImage);
+    }
+
+    bannerMutation.mutate(formData);
   };
 
   return (
@@ -186,7 +256,7 @@ export default function Content() {
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          onClick={() => deleteBannerMutation.mutate(banner.id)}
+                          onClick={() => handleDeleteBanner(banner)}
                           className="text-red-600"
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
@@ -332,35 +402,64 @@ export default function Content() {
 
       {/* Banner Modal */}
       <Dialog open={showBannerModal} onOpenChange={closeBannerModal}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingBanner ? 'Edit Banner' : 'Add New Banner'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Title</Label>
-              <Input
-                value={bannerForm.title}
-                onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
-                placeholder="Summer Sale"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Subtitle</Label>
-              <Input
-                value={bannerForm.subtitle}
-                onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
-                placeholder="Up to 30% off"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Image URL</Label>
-              <Input
-                value={bannerForm.image_url}
-                onChange={(e) => setBannerForm({ ...bannerForm, image_url: e.target.value })}
-                placeholder="https://..."
-              />
-            </div>
+          <form onSubmit={handleBannerSubmit}>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Title *</Label>
+                <Input
+                  value={bannerForm.title}
+                  onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
+                  placeholder="Summer Sale"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Subtitle</Label>
+                <Input
+                  value={bannerForm.subtitle}
+                  onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
+                  placeholder="Up to 30% off"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Upload Image (Optional)</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                />
+                <p className="text-xs text-slate-500">Upload image from your system (JPEG, PNG, GIF, WebP - Max 5MB)</p>
+              </div>
+              <div className="space-y-2">
+                <Label>OR Image URL (Optional)</Label>
+                <Input
+                  value={bannerForm.image_url}
+                  onChange={(e) => {
+                    setBannerForm({ ...bannerForm, image_url: e.target.value });
+                    if (e.target.value) {
+                      setImagePreview(e.target.value);
+                      setSelectedImage(null);
+                    }
+                  }}
+                  placeholder="https://..."
+                  disabled={!!selectedImage}
+                />
+                <p className="text-xs text-slate-500">Provide image URL if not uploading a file</p>
+              </div>
+              {imagePreview && (
+                <div className="mt-4">
+                  <Label>Preview</Label>
+                  <img 
+                    src={imagePreview} 
+                    alt="Banner preview" 
+                    className="w-full h-48 object-cover rounded-lg border border-slate-300 mt-2"
+                  />
+                </div>
+              )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Action Type</Label>
@@ -423,13 +522,14 @@ export default function Content() {
               />
               <Label>Active</Label>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeBannerModal}>Cancel</Button>
-            <Button onClick={() => bannerMutation.mutate(bannerForm)}>
-              {editingBanner ? 'Save Changes' : 'Add Banner'}
-            </Button>
-          </DialogFooter>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeBannerModal}>Cancel</Button>
+              <Button type="submit" disabled={bannerMutation.isPending}>
+                {bannerMutation.isPending ? 'Saving...' : editingBanner ? 'Save Changes' : 'Add Banner'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

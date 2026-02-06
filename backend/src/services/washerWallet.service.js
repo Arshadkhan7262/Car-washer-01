@@ -5,6 +5,7 @@
 
 import Washer from '../models/Washer.model.js';
 import Booking from '../models/Booking.model.js';
+import Withdrawal from '../models/Withdrawal.model.js';
 import AppError from '../errors/AppError.js';
 
 /**
@@ -64,23 +65,26 @@ export const getWalletStats = async (userId, period = 'today') => {
     }
 
     // Get completed jobs count for period
+    // Use updated_date (when job was completed) instead of created_date
     const jobsCompleted = await Booking.countDocuments({
       washer_id: washerId,
       status: 'completed',
-      created_date: {
+      payment_status: 'paid',
+      updated_date: {
         $gte: startDate,
         $lte: now
       }
     });
 
     // Get earnings for period
+    // Use updated_date (when job was completed) instead of created_date
     const earningsData = await Booking.aggregate([
       {
         $match: {
           washer_id: washerId,
           status: 'completed',
           payment_status: 'paid',
-          created_date: {
+          updated_date: {
             $gte: startDate,
             $lte: now
           }
@@ -111,7 +115,7 @@ export const getWalletStats = async (userId, period = 'today') => {
 };
 
 /**
- * Get transaction history (from completed bookings)
+ * Get transaction history (from completed bookings and withdrawals)
  */
 export const getTransactions = async (userId, filters = {}) => {
   try {
@@ -137,6 +141,7 @@ export const getTransactions = async (userId, filters = {}) => {
     };
 
     // Add date filter if period is specified
+    // Use updated_date (when job was completed) instead of created_date
     if (period !== 'all') {
       const now = new Date();
       let startDate = new Date();
@@ -155,7 +160,7 @@ export const getTransactions = async (userId, filters = {}) => {
           break;
       }
       
-      query.created_date = {
+      query.updated_date = {
         $gte: startDate,
         $lte: now
       };
@@ -169,30 +174,65 @@ export const getTransactions = async (userId, filters = {}) => {
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const transactions = await Booking.find(query)
-      .select('booking_id customer_name service_name total payment_method created_date status')
+    // Get booking transactions
+    const bookingTransactions = await Booking.find(query)
+      .select('booking_id customer_name service_name total payment_method created_date status updated_date')
       .sort(sortObj)
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
 
-    const total = await Booking.countDocuments(query);
+    // Get withdrawal transactions
+    const withdrawalQuery = {
+      user_id: userId,
+      status: { $in: ['completed', 'failed', 'rejected', 'processing'] },
+    };
+    
+    if (period !== 'all') {
+      withdrawalQuery.requested_date = query.updated_date || {};
+    }
 
-    // Transform to transaction format
-    const formattedTransactions = transactions.map(tx => ({
+    const withdrawalTransactions = await Withdrawal.find(withdrawalQuery)
+      .sort({ completed_date: -1, requested_date: -1 })
+      .limit(parseInt(limit))
+      .skip(skip)
+      .lean();
+
+    const bookingTotal = await Booking.countDocuments(query);
+    const withdrawalTotal = await Withdrawal.countDocuments(withdrawalQuery);
+    const total = bookingTotal + withdrawalTotal;
+
+    // Transform booking transactions
+    const formattedBookingTransactions = bookingTransactions.map(tx => ({
       id: tx._id.toString(),
       booking_id: tx.booking_id,
       customer_name: tx.customer_name,
       service_name: tx.service_name,
       amount: tx.total,
-      type: 'earning', // All transactions are earnings for washer
+      type: 'earning',
       payment_method: tx.payment_method,
-      date: tx.created_date,
-      status: tx.status
+      created_at: tx.updated_date || tx.created_date,
+      status: tx.status === 'completed' ? 'completed' : 'pending'
     }));
 
+    // Transform withdrawal transactions
+    const formattedWithdrawalTransactions = withdrawalTransactions.map(wd => ({
+      id: wd._id.toString(),
+      withdrawal_id: wd._id.toString(),
+      amount: wd.amount,
+      type: 'withdrawal',
+      created_at: wd.completed_date || wd.requested_date,
+      status: wd.status,
+      note: wd.admin_note || wd.rejection_reason,
+    }));
+
+    // Combine and sort by date (most recent first)
+    const allTransactions = [...formattedBookingTransactions, ...formattedWithdrawalTransactions]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, parseInt(limit));
+
     return {
-      transactions: formattedTransactions,
+      transactions: allTransactions,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),

@@ -95,7 +95,7 @@ class StatusCard extends StatelessWidget {
                     : Color(0xFF0A2540).withOpacity(0.49),
               ),
               onChanged: (value) {
-                controller.isOnline.value = value;
+                controller.toggleStatus(value);
               },
             ),
           ),

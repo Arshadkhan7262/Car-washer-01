@@ -1,7 +1,9 @@
 import React from 'react';
-import { Bell, Search, Menu, LogOut } from "lucide-react";
+import { Bell, Search, Menu, LogOut, DollarSign, ExternalLink } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,9 +20,40 @@ export default function TopBar({ onMenuClick }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  // Fetch recent notifications
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications', 'recent'],
+    queryFn: async () => {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3000/api/v1'}/admin/notifications?limit=5&sort=-created_at`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('admin_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      return data.success ? data.data.notifications : [];
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Filter to show only withdrawal notifications
+  const withdrawalNotifications = notifications.filter(n => 
+    n.data?.type === 'withdrawal_request'
+  );
+
+  // Count pending withdrawal requests (only show withdrawal notifications)
+  const pendingWithdrawals = withdrawalNotifications.filter(n => 
+    n.data?.status === 'pending'
+  );
+  const unreadCount = pendingWithdrawals.length;
+
   const handleLogout = async () => {
     await logout();
     navigate('/login');
+  };
+
+  const handleViewWithdrawal = (notification) => {
+    navigate('/payments?tab=withdrawals&status=pending');
   };
 
   const getInitials = (name) => {
@@ -58,24 +91,86 @@ export default function TopBar({ onMenuClick }) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="w-5 h-5 text-slate-600" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                  {unreadCount}
+                </span>
+              )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-96 max-h-[500px] overflow-y-auto">
+            <DropdownMenuLabel className="flex items-center justify-between">
+              <span>Notifications</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto p-0 text-xs text-blue-600"
+                onClick={() => navigate('/notifications')}
+              >
+                View All
+              </Button>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium">New booking received</span>
-              <span className="text-sm text-slate-500">John Doe booked Premium Wash - 2 mins ago</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium">Washer went online</span>
-              <span className="text-sm text-slate-500">Mike Johnson is now available - 5 mins ago</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium">Payment received</span>
-              <span className="text-sm text-slate-500">$85.00 from Sarah Smith - 10 mins ago</span>
-            </DropdownMenuItem>
+            {withdrawalNotifications.length === 0 ? (
+              <DropdownMenuItem disabled className="text-sm text-slate-500">
+                No withdrawal requests
+              </DropdownMenuItem>
+            ) : (
+              withdrawalNotifications.slice(0, 5).map((notif) => {
+                const isWithdrawal = notif.data?.type === 'withdrawal_request';
+                const isPending = notif.data?.status === 'pending';
+                return (
+                  <DropdownMenuItem
+                    key={notif._id}
+                    className={`flex flex-col items-start gap-1 py-3 cursor-pointer ${
+                      isPending ? 'bg-amber-50 hover:bg-amber-100' : ''
+                    }`}
+                    onClick={() => {
+                      // Always navigate to withdrawals tab for withdrawal notifications
+                      handleViewWithdrawal(notif);
+                    }}
+                  >
+                    <div className="flex items-start gap-2 w-full">
+                      {isWithdrawal ? (
+                        <DollarSign className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <Bell className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-sm block">{notif.title}</span>
+                        <span className="text-xs text-slate-500 block mt-1">{notif.message}</span>
+                        {isWithdrawal && (
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-xs font-medium text-emerald-600">
+                              ${parseFloat(notif.data?.amount || 0).toFixed(2)}
+                            </span>
+                            {isPending && (
+                              <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">
+                                Pending
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        <span className="text-xs text-slate-400 block mt-1">
+                          {notif.created_at && format(new Date(notif.created_at), 'MMM d, h:mm a')}
+                        </span>
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                );
+              })
+            )}
+            {withdrawalNotifications.length > 5 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-center justify-center text-sm text-blue-600 cursor-pointer"
+                  onClick={() => navigate('/payments?tab=withdrawals&status=pending')}
+                >
+                  View All Withdrawal Requests
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

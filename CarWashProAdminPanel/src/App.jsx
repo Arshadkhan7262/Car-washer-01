@@ -1,5 +1,5 @@
 import React from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Layout from './layout.jsx'
 import Login from './pages/Login.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
@@ -17,8 +17,9 @@ import Support from './pages/Support.jsx'
 import Content from './pages/Content.jsx'
 import Settings from './pages/Settings.jsx'
 import Reports from './pages/Reports.jsx'
+import Notifications from './pages/Notifications.jsx'
 
-function App() {
+function AppContent() {
   return (
     <Routes>
       {/* Public route */}
@@ -46,6 +47,7 @@ function App() {
         <Route path="reviews" element={<Reviews />} />
         <Route path="support" element={<Support />} />
         <Route path="content" element={<Content />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="settings" element={<Settings />} />
         <Route path="reports" element={<Reports />} />
       </Route>
@@ -54,6 +56,10 @@ function App() {
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )
+}
+
+function App() {
+  return <AppContent />;
 }
 
 export default App

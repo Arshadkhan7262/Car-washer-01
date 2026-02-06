@@ -313,16 +313,36 @@ class Base44Client {
           return data.data || []
         },
         create: async (data) => {
-          const response = await fetchWithAuth(`${API_BASE_URL}/admin/settings/banners`, {
+          // Check if data is FormData (for file upload) or regular object
+          const isFormData = data instanceof FormData;
+          const headers = getAuthHeaders();
+          
+          // Remove Content-Type header for FormData (browser will set it with boundary)
+          if (isFormData) {
+            delete headers['Content-Type'];
+          }
+          
+          const response = await fetch(`${API_BASE_URL}/admin/settings/banners`, {
             method: 'POST',
-            body: JSON.stringify(data),
+            headers: headers,
+            body: isFormData ? data : JSON.stringify(data),
           })
           return response.json()
         },
         update: async (id, data) => {
-          const response = await fetchWithAuth(`${API_BASE_URL}/admin/settings/banners/${id}`, {
+          // Check if data is FormData (for file upload) or regular object
+          const isFormData = data instanceof FormData;
+          const headers = getAuthHeaders();
+          
+          // Remove Content-Type header for FormData (browser will set it with boundary)
+          if (isFormData) {
+            delete headers['Content-Type'];
+          }
+          
+          const response = await fetch(`${API_BASE_URL}/admin/settings/banners/${id}`, {
             method: 'PUT',
-            body: JSON.stringify(data),
+            headers: headers,
+            body: isFormData ? data : JSON.stringify(data),
           })
           return response.json()
         },
@@ -420,6 +440,92 @@ class Base44Client {
           return response.json()
         },
       },
+      Payment: {
+        list: async (sort = '-created_date', limit = 200) => {
+          const response = await fetchWithAuth(`${API_BASE_URL}/stripe/admin/payments?sort=${sort}&limit=${limit}`)
+          const data = await response.json()
+          return data.data?.payments || data.data || []
+        },
+        filter: async (filters) => {
+          const query = new URLSearchParams(filters).toString()
+          const response = await fetchWithAuth(`${API_BASE_URL}/stripe/admin/payments?${query}`)
+          const data = await response.json()
+          return data.data?.payments || data.data || []
+        },
+        get: async (id) => {
+          const response = await fetchWithAuth(`${API_BASE_URL}/stripe/admin/payments/${id}`)
+          const data = await response.json()
+          return data.data
+        },
+        update: async (id, data) => {
+          const response = await fetchWithAuth(`${API_BASE_URL}/stripe/admin/payments/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+          })
+          return response.json()
+        },
+      },
+      Withdrawal: {
+        list: async (filters = {}) => {
+          const query = new URLSearchParams(filters).toString()
+          const response = await fetchWithAuth(`${API_BASE_URL}/admin/withdrawal/all?${query}`)
+          const data = await response.json()
+          return data.data?.withdrawals || data.data || []
+        },
+        get: async (id) => {
+          const response = await fetchWithAuth(`${API_BASE_URL}/admin/withdrawal/${id}`)
+          const data = await response.json()
+          return data.data
+        },
+        approve: async (id, note = null) => {
+          const response = await fetchWithAuth(`${API_BASE_URL}/admin/withdrawal/${id}/approve`, {
+            method: 'PUT',
+            body: JSON.stringify({ note }),
+          })
+          const result = await response.json()
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || result.error?.message || 'Failed to approve withdrawal')
+          }
+          return result
+        },
+        process: async (id) => {
+          const response = await fetchWithAuth(`${API_BASE_URL}/admin/withdrawal/${id}/process`, {
+            method: 'PUT',
+          })
+          const result = await response.json()
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || result.error?.message || 'Failed to process withdrawal')
+          }
+          return result
+        },
+        reject: async (id, reason) => {
+          const response = await fetchWithAuth(`${API_BASE_URL}/admin/withdrawal/${id}/reject`, {
+            method: 'PUT',
+            body: JSON.stringify({ reason }),
+          })
+          const result = await response.json()
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || result.error?.message || 'Failed to reject withdrawal')
+          }
+          return result
+        },
+        getLimit: async () => {
+          const response = await fetchWithAuth(`${API_BASE_URL}/admin/withdrawal/limit`)
+          const data = await response.json()
+          return data.data?.minimum_limit || 2000
+        },
+        setLimit: async (limit) => {
+          const response = await fetchWithAuth(`${API_BASE_URL}/admin/withdrawal/limit`, {
+            method: 'PUT',
+            body: JSON.stringify({ limit }),
+          })
+          const result = await response.json()
+          if (!response.ok || !result.success) {
+            throw new Error(result.message || result.error?.message || 'Failed to set withdrawal limit')
+          }
+          return result
+        },
+      },
     }
 
     this.notifications = {
@@ -433,6 +539,12 @@ class Base44Client {
           throw new Error(result.message || result.error?.message || 'Failed to send notification')
         }
         return result
+      },
+      list: async (filters = {}) => {
+        const query = new URLSearchParams(filters).toString()
+        const response = await fetchWithAuth(`${API_BASE_URL}/admin/notifications?${query}`)
+        const data = await response.json()
+        return data.success ? data.data.notifications : []
       },
     }
   }

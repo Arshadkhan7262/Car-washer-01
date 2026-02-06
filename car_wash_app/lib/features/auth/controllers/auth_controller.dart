@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../services/auth_service.dart';
@@ -25,7 +26,7 @@ class AuthController extends GetxController {
   var canResend = false.obs; // Whether resend button is enabled
   
   // Email for OTP flow
-  String? _email;
+  var email = Rxn<String>();
 
   // Timer controller
   Timer? _resendTimerController;
@@ -88,9 +89,11 @@ class AuthController extends GetxController {
       // IMPORTANT: Registration doesn't return tokens
       // User must verify email via OTP first
       // Navigate to email verification screen
-      _email = result['email'];
+      this.email.value = result['email'];
+      // Start resend timer (60 seconds)
+      startResendTimer();
       Get.toNamed('/email-otp-verify', arguments: {
-        'email': _email,
+        'email': this.email.value,
         'isRegistration': true,
       });
       return true;
@@ -106,18 +109,18 @@ class AuthController extends GetxController {
     try {
       isSendingOTP.value = true;
       errorMessage.value = '';
-      _email = email.toLowerCase();
+      this.email.value = email.toLowerCase();
 
       final result = await _authService.requestEmailOTP(email);
 
         isSendingOTP.value = false;
-      _email = result['email'];
+      this.email.value = result['email'];
       
           // Start resend timer (60 seconds)
-          _startResendTimer();
+          startResendTimer();
       
           // Navigate to OTP screen
-      Get.toNamed('/email-otp-verify', arguments: {'email': _email});
+      Get.toNamed('/email-otp-verify', arguments: {'email': this.email.value});
       return true;
     } catch (e) {
       isSendingOTP.value = false;
@@ -131,7 +134,7 @@ class AuthController extends GetxController {
   /// If canLogin=false: Show message about admin approval (status=pending)
   Future<bool> verifyEmailOTP(String otp) async {
     try {
-      if (_email == null) {
+      if (email.value == null) {
         errorMessage.value = 'Email not found. Please request OTP again.';
         return false;
       }
@@ -139,7 +142,7 @@ class AuthController extends GetxController {
       isVerifyingOTP.value = true;
       errorMessage.value = '';
 
-      final result = await _authService.verifyEmailOTP(_email!, otp);
+      final result = await _authService.verifyEmailOTP(email.value!, otp);
 
       isVerifyingOTP.value = false;
 
@@ -186,9 +189,11 @@ class AuthController extends GetxController {
       );
 
       // Navigate to email OTP screen for reset code
-      _email = email.toLowerCase();
+      this.email.value = email.toLowerCase();
+      // Start resend timer (60 seconds)
+      startResendTimer();
       Get.toNamed('/email-otp-verify', arguments: {
-        'email': _email,
+        'email': this.email.value,
         'isPasswordReset': true,
       });
       return true;
@@ -202,7 +207,7 @@ class AuthController extends GetxController {
   /// Reset password with OTP
   Future<bool> resetPassword(String otp, String newPassword) async {
     try {
-      if (_email == null) {
+      if (email.value == null) {
         errorMessage.value = 'Email not found. Please request password reset again.';
         return false;
       }
@@ -210,7 +215,7 @@ class AuthController extends GetxController {
       isResettingPassword.value = true;
       errorMessage.value = '';
 
-      final result = await _authService.resetPassword(_email!, otp, newPassword);
+      final result = await _authService.resetPassword(email.value!, otp, newPassword);
 
       isResettingPassword.value = false;
 
@@ -234,14 +239,42 @@ class AuthController extends GetxController {
   }
 
   /// Resend email OTP
+  /// Sends OTP to washer's email via API: POST /washer/auth/send-email-otp
   Future<bool> resendEmailOTP() async {
-    if (_email == null) {
+    // If email is not set, try to get it from storage (app restart scenario)
+    if (email.value == null) {
+      try {
+        final storedEmail = await _authService.getUserEmail();
+        if (storedEmail != null) {
+          email.value = storedEmail;
+          debugPrint('📧 [resendEmailOTP] Loaded email from storage: $storedEmail');
+        }
+      } catch (e) {
+        debugPrint('❌ [resendEmailOTP] Failed to load email from storage: $e');
+      }
+    }
+    
+    if (email.value == null) {
       errorMessage.value = 'Email not found';
+      Get.snackbar(
+        'Error',
+        'Email not found. Please try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
       return false;
     }
 
     if (!canResend.value) {
       errorMessage.value = 'Please wait before resending OTP';
+      Get.snackbar(
+        'Wait',
+        'Please wait before resending OTP',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
       return false;
     }
 
@@ -249,19 +282,62 @@ class AuthController extends GetxController {
     _stopResendTimer();
     canResend.value = false;
     resendTimer.value = 0;
+    errorMessage.value = '';
+    isSendingOTP.value = true;
 
-    final success = await requestEmailOTP(_email!);
-    
-    if (!success) {
+    try {
+      debugPrint('🔄 [resendEmailOTP] Sending OTP to email: ${email.value}');
+      debugPrint('🔄 [resendEmailOTP] API: POST /washer/auth/send-email-otp');
+      
+      // Send OTP email directly (without navigation)
+      // This calls: POST /washer/auth/send-email-otp with email in body
+      final result = await _authService.requestEmailOTP(email.value!);
+      
+      isSendingOTP.value = false;
+      email.value = result['email'];
+      
+      debugPrint('✅ [resendEmailOTP] OTP sent successfully to: ${result['email']}');
+      debugPrint('✅ [resendEmailOTP] Response message: ${result['message']}');
+      
+      // Start resend timer (60 seconds)
+      startResendTimer();
+      
+      // Show success message
+      Get.snackbar(
+        'Success',
+        'OTP has been sent to ${result['email']}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+      
+      return true;
+    } catch (e) {
+      isSendingOTP.value = false;
+      final errorMsg = e.toString().replaceAll('Exception: ', '').replaceAll('Failed to send OTP: ', '');
+      errorMessage.value = errorMsg;
+      
+      debugPrint('❌ [resendEmailOTP] Failed to send OTP: $errorMsg');
+      
+      // Show error message
+      Get.snackbar(
+        'Error',
+        errorMsg,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+      );
+      
       // Re-enable resend if sending failed
       canResend.value = true;
+      return false;
     }
-
-    return success;
   }
 
   /// Start resend timer (60 seconds)
-  void _startResendTimer() {
+  void startResendTimer() {
     _stopResendTimer(); // Clear any existing timer
     
     resendTimer.value = 60; // 60 seconds
@@ -295,12 +371,9 @@ class AuthController extends GetxController {
     errorMessage.value = '';
   }
 
-  /// Get current email
-  String? get email => _email;
-
   /// Set email (for password reset flow)
   void setEmail(String email) {
-    _email = email.toLowerCase();
+    this.email.value = email.toLowerCase();
   }
 
   /// Initialize FCM token controller and save token to backend

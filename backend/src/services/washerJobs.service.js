@@ -21,6 +21,8 @@ export const getWasherJobs = async (userId, filters = {}) => {
     }
     
     const washerId = washer._id.toString();
+    // Convert washerId string to ObjectId for query (MongoDB requires ObjectId for matching)
+    const washerObjectId = new mongoose.Types.ObjectId(washerId);
     
     const {
       status,
@@ -29,11 +31,14 @@ export const getWasherJobs = async (userId, filters = {}) => {
       sort = '-created_date'
     } = filters;
 
-    const query = { washer_id: washerId };
+    const query = { washer_id: washerObjectId };
 
     // Filter by status if provided
     if (status) {
       query.status = status;
+    } else {
+      // Exclude cancelled jobs by default (they can be shown if status='cancelled' is explicitly requested)
+      query.status = { $ne: 'cancelled' };
     }
 
     // Parse sort

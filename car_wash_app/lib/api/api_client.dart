@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:developer';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../util/constants.dart';
 import 'api_checker.dart';
@@ -91,6 +90,7 @@ class ApiClient {
     String endpoint, {
     Map<String, dynamic>? body,
     Map<String, String>? headers,
+    int? timeoutMs,
   }) async {
     try {
       // Check connectivity
@@ -110,10 +110,32 @@ class ApiClient {
       log('Request Body: $requestBody');
       log('───────────────────────────────────────────────────────────');
 
-      // Make request
-      final response = await http
-          .post(url, headers: requestHeaders, body: requestBody)
-          .timeout(Duration(milliseconds: AppConstants.connectionTimeout));
+      // Use custom timeout or default
+      final timeout = timeoutMs ?? AppConstants.connectionTimeout;
+
+      // Make request with retry logic for withdrawal requests
+      http.Response? response;
+      int retries = endpoint.contains('withdrawal') ? 2 : 0; // Retry withdrawal requests
+      
+      for (int attempt = 0; attempt <= retries; attempt++) {
+        try {
+          response = await http
+              .post(url, headers: requestHeaders, body: requestBody)
+              .timeout(Duration(milliseconds: timeout));
+          break; // Success, exit retry loop
+        } catch (e) {
+          if (attempt < retries && e.toString().contains('Connection closed')) {
+            log('⚠️ Connection closed, retrying... (attempt ${attempt + 1}/${retries + 1})');
+            await Future.delayed(Duration(milliseconds: 1000 * (attempt + 1))); // Exponential backoff
+            continue;
+          }
+          rethrow;
+        }
+      }
+
+      if (response == null) {
+        throw Exception('Failed to get response after retries');
+      }
 
       // Log response
       log('📥 API RESPONSE [POST]');
@@ -126,7 +148,16 @@ class ApiClient {
       log('❌ API ERROR [POST]');
       log('Error: $e');
       log('═══════════════════════════════════════════════════════════');
-      return ApiResponse(success: false, error: e.toString());
+      
+      // Provide more helpful error messages
+      String errorMessage = e.toString();
+      if (errorMessage.contains('Connection closed')) {
+        errorMessage = 'Connection lost. Please check your internet connection and try again.';
+      } else if (errorMessage.contains('TimeoutException')) {
+        errorMessage = 'Request timed out. Please try again.';
+      }
+      
+      return ApiResponse(success: false, error: errorMessage);
     }
   }
 
