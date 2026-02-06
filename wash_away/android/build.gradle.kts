@@ -19,12 +19,10 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// Disable AAR metadata check (flutter_local_notifications; desugaring is enabled in app/build.gradle)
-gradle.projectsEvaluated {
-    rootProject.subprojects.forEach { sub ->
-        sub.tasks.findByName("checkDebugAarMetadata")?.setEnabled(false)
-        sub.tasks.findByName("checkReleaseAarMetadata")?.setEnabled(false)
-    }
+// Disable AAR metadata check for flutter_local_notifications (desugaring is enabled in app/build.gradle)
+project(":app").afterEvaluate {
+    tasks.findByName("checkDebugAarMetadata")?.setEnabled(false)
+    tasks.findByName("checkReleaseAarMetadata")?.setEnabled(false)
 }
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

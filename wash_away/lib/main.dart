@@ -1,4 +1,3 @@
-
 import 'dart:developer';
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
@@ -10,7 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
-import 'features/auth/auth_binding.dart';
+import 'features/auth/auth_binding.dart'; 
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/signup_screen.dart';
 import 'features/auth/screens/email_otp_screen.dart';
@@ -26,6 +25,7 @@ import 'themes/light_theme.dart';
 import 'features/notifications/services/notification_handler_service.dart';
 import 'features/notifications/controllers/notification_controller.dart';
 import 'features/notifications/controllers/fcm_token_controller.dart';
+import 'features/notifications/widgets/in_app_notification_banner.dart';
 import 'util/constants.dart';
 import 'config/env_config.dart';
 // DRAFT BOOKING FUNCTIONALITY COMMENTED OUT
@@ -157,9 +157,9 @@ void main() async {
         // This prevents Firebase from auto-showing notifications when app is in foreground
         try {
           await messaging.setForegroundNotificationPresentationOptions(
-            alert: false,  // Don't auto-show alert (we'll show via flutter_local_notifications)
+            alert: true,  // Don't auto-show alert (we'll show via flutter_local_notifications)
             badge: true,   // Still update badge
-            sound: false,  // Don't auto-play sound (we'll handle it)
+            sound: true,  // Don't auto-play sound (we'll handle it)
           );
           debugPrint('✅ [Notification] Disabled Firebase auto-display in foreground (iOS)');
         } catch (e) {
@@ -292,6 +292,20 @@ class _MyAppState extends State<MyApp> {
           : ThemeMode.light,
       initialBinding: AuthBinding(),
       initialRoute: '/',
+      builder: (context, child) {
+        return Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            if (child != null) child,
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: InAppNotificationBanner(),
+            ),
+          ],
+        );
+      },
       getPages: [
         GetPage(
           name: '/',

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,9 +28,6 @@ class NotificationHandlerService {
   // Store subscriptions to prevent duplicate listeners
   StreamSubscription<RemoteMessage>? _onMessageSubscription;
   StreamSubscription<RemoteMessage>? _onMessageOpenedAppSubscription;
-  
-  // Track processed message IDs to prevent duplicate notifications
-  final Set<String> _processedMessageIds = {};
   
   // Map of booking_id -> callback functions
   final Map<String, List<BookingStatusCallback>> _bookingCallbacks = {};
@@ -323,40 +321,10 @@ class NotificationHandlerService {
       
       // Store subscription to prevent garbage collection and track it
       _onMessageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-        // Prevent duplicate notifications by checking message ID
-        // Use a combination of messageId, booking_id, status, and timestamp for reliable duplicate detection
-        final bookingId = message.data['booking_id']?.toString() ?? '';
-        final status = message.data['status']?.toString() ?? '';
-        final timestamp = message.sentTime?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
-        final messageId = message.messageId ?? 
-                         '${bookingId}_${status}_${timestamp}';
-        
-        // Create a unique key for duplicate detection
-        final duplicateKey = '${messageId}_${bookingId}_${status}';
-        
-        if (_processedMessageIds.contains(duplicateKey)) {
-          log('⚠️ [NotificationHandler] Duplicate notification detected (Key: $duplicateKey), skipping...');
-          log('⚠️ [NotificationHandler] Message ID: $messageId, Booking: $bookingId, Status: $status');
-          return;
-        }
-        
-        _processedMessageIds.add(duplicateKey);
-        // Clean up old message IDs (keep only last 100)
-        if (_processedMessageIds.length > 100) {
-          _processedMessageIds.remove(_processedMessageIds.first);
-        }
-        
-        log('📱 [NotificationHandler] Processing notification (Key: $duplicateKey)');
-        
-        log('📱 [NotificationHandler] ==========================================');
-        log('📱 [NotificationHandler] ✅✅✅ FOREGROUND NOTIFICATION RECEIVED ✅✅✅');
-        debugPrint('📱 [Notification] FOREGROUND RECEIVED: ${message.notification?.title ?? message.data['title']}');
-        log('📱 [NotificationHandler] Message ID: ${messageId}');
-        log('📱 [NotificationHandler] Has notification: ${message.notification != null}');
-        log('📱 [NotificationHandler] Title: ${message.notification?.title}');
-        log('📱 [NotificationHandler] Body: ${message.notification?.body}');
-        log('📱 [NotificationHandler] Data: ${message.data}');
-        log('📱 [NotificationHandler] ==========================================');
+        log('📱 [NotificationHandler] Foreground notification received');
+        log('📱 Title: ${message.notification?.title}');
+        log('📱 Body: ${message.notification?.body}');
+        log('📱 Data: ${message.data}');
 
         // Extract title and body from notification or data payload
         String title = message.notification?.title ?? 
@@ -381,14 +349,28 @@ class NotificationHandlerService {
           debugPrint('❌ [Notification] Tray show failed: $e');
         }
 
-        // Then process callbacks, in-app list, and pending navigation (non-blocking for display)
+        // Then process callbacks, in-app list, in-app top banner, and pending navigation (non-blocking for display)
         try {
+          final bid = message.data['booking_id']?.toString() ?? message.data['bookingId']?.toString() ?? '';
+          if (bid.isNotEmpty) _notificationController.recordForegroundPush(bid);
           _processBookingNotification(message);
           _notificationController.addNotification(
             title: title,
             body: body,
             data: message.data,
           );
+          // Show banner on next frame so UI updates reliably (and snackbar suppression already set above)
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            try {
+              _notificationController.showBanner(
+                title: title,
+                body: body,
+                data: message.data,
+              );
+            } catch (e) {
+              log('❌ [NotificationHandler] Error showing banner: $e');
+            }
+          });
           _storePendingNavigation(message.data);
         } catch (e) {
           log('❌ [NotificationHandler] Error in post-notification processing: $e');
@@ -533,12 +515,12 @@ class NotificationHandlerService {
       );
       await Future.delayed(Duration.zero); // yield to UI
 
-      // Create Android notification channel - CRITICAL for foreground notifications (max = heads-up on more devices)
+      // Create Android notification channel (matches car_wash_app - Importance.high)
       const AndroidNotificationChannel channel = AndroidNotificationChannel(
         'high_importance_channel', // id - must match AndroidManifest.xml
         'High Importance Notifications', // name
         description: 'This channel is used for important notifications.',
-        importance: Importance.max,
+        importance: Importance.high,
         playSound: true,
       );
 
@@ -604,7 +586,7 @@ class NotificationHandlerService {
             'high_importance_channel',
             'High Importance Notifications',
             description: 'This channel is used for important notifications.',
-            importance: Importance.max,
+            importance: Importance.high,
             playSound: true,
           );
           
@@ -635,19 +617,16 @@ class NotificationHandlerService {
       // Create payload for navigation
       final payload = '$bookingId|$screen';
 
-      // Android notification details (Importance.max + Priority.max + ticker for heads-up popup when app in foreground)
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'high_importance_channel', // CRITICAL: Must match channel ID
+      // Android notification details (matches car_wash_app: Importance.high, Priority.high)
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'high_importance_channel', // Must match channel ID
         'High Importance Notifications',
         channelDescription: 'This channel is used for important notifications.',
-        importance: Importance.max,
-        priority: Priority.max,
+        importance: Importance.high,
+        priority: Priority.high,
         showWhen: true,
         playSound: true,
         enableVibration: true,
-        visibility: NotificationVisibility.public,
-        fullScreenIntent: false,
-        ticker: title, // Helps show heads-up on some OEMs
       );
 
       // iOS notification details
@@ -710,17 +689,15 @@ class NotificationHandlerService {
         final int id = DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
         
         final NotificationDetails retryDetails = NotificationDetails(
-          android: AndroidNotificationDetails(
+          android: const AndroidNotificationDetails(
             'high_importance_channel',
             'High Importance Notifications',
             channelDescription: 'This channel is used for important notifications.',
-            importance: Importance.max,
-            priority: Priority.max,
+            importance: Importance.high,
+            priority: Priority.high,
             showWhen: true,
             playSound: true,
             enableVibration: true,
-            visibility: NotificationVisibility.public,
-            ticker: title,
           ),
           iOS: const DarwinNotificationDetails(
             presentAlert: true,

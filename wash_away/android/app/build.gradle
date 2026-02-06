@@ -30,30 +30,13 @@ android {
         targetSdk flutter.targetSdkVersion
         versionCode flutter.versionCode
         versionName flutter.versionName
+        multiDexEnabled true
     }
 
     buildTypes {
         release {
             signingConfig signingConfigs.debug
         }
-    }
-}
-afterEvaluate {
-    android.compileOptions.coreLibraryDesugaringEnabled = true
-    // Replace AAR metadata check with no-op so build succeeds (desugaring is enabled above)
-    ["checkDebugAarMetadata", "checkReleaseAarMetadata"].each { taskName ->
-        def t = tasks.findByName(taskName)
-        if (t != null) {
-            t.actions.clear()
-            t.doLast { }
-        }
-    }
-}
-// Also clear the check right before it runs (in case actions are added late)
-gradle.taskGraph.beforeTask { task ->
-    if (task.name in ["checkDebugAarMetadata", "checkReleaseAarMetadata"]) {
-        task.actions.clear()
-        task.doLast { }
     }
 }
 

@@ -8,6 +8,7 @@ import '../themes/light_theme.dart';
 import '../features/bookings/services/booking_service.dart';
 import '../controllers/book_controller.dart';
 import '../features/notifications/services/notification_handler_service.dart';
+import '../features/notifications/controllers/notification_controller.dart';
 import 'washer_tracking_map_screen.dart';
 
 class AppColors {
@@ -214,8 +215,11 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
           }
         }
         
-        // Don't show snackbar when update came from push notification - system notification already showed
-        if (message.isNotEmpty && !fromPushNotification) {
+        // Don't show snackbar when update came from push - show push/banner instead (foreground)
+        final skipSnackbar = fromPushNotification ||
+            (Get.isRegistered<NotificationController>() &&
+                Get.find<NotificationController>().wasRecentlyNotifiedByPush(widget.bookingId));
+        if (message.isNotEmpty && !skipSnackbar) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(message),
