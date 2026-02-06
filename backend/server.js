@@ -1,128 +1,84 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import os from 'os';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import connectDatabase from './src/config/database.config.js';
-import errorHandler from './src/errors/errorHandler.js';
-import routes from './src/routes/index.routes.js';
-import getStripeInstance from './src/config/stripe.config.js';
-// Initialize Firebase Admin SDK early (required for notifications)
-import './src/config/firebase.config.js';
-import apiLogger from './src/middleware/apiLogger.js';
+import { connectDatabase } from './src/config/database.config.js';
+import cmsRoutes from './src/routes/cms.routes.js';
+import publicCMSRoutes from './src/routes/publicCMS.routes.js';
+import adminBankAccountRoutes from './src/routes/adminBankAccount.routes.js';
+import bankAccountRoutes from './src/routes/bankAccount.routes.js';
+import withdrawalRoutes from './src/routes/withdrawal.routes.js';
+import bannerRoutes from './src/routes/banner.routes.js';
+import customerBannerRoutes from './src/routes/customerBanner.routes.js';
+import stripeConnectRoutes from './src/routes/stripeConnect.routes.js';
 
-// Load environment variables from backend/.env (same dir as server.js)
-dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.env') });
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Load environment variables
+dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-
-// Trust proxy for accurate IP detection (needed for ngrok, reverse proxies, etc.)
-app.set('trust proxy', true);
-
-// Stripe webhook needs raw body for signature verification
-// Must be before express.json() middleware
-app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
-
-// Increase body parser limit for large Firebase tokens
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static('uploads'));
 
-// Global API Request Logger Middleware
-// Must be registered before routes to log all API requests
-app.use('/api/v1', apiLogger);
-
-// Routes
-app.use('/api/v1', routes);
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route ${req.originalUrl} not found`
+// Health check
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString()
   });
 });
 
-// Global error handler
-app.use(errorHandler);
+// API Routes
+app.use('/api/v1/admin/cms', cmsRoutes);
+app.use('/api/v1/cms', publicCMSRoutes);
+app.use('/api/v1/admin/bank-accounts', adminBankAccountRoutes);
+app.use('/api/v1/washer/bank-account', bankAccountRoutes);
+app.use('/api/v1/admin/withdrawal', withdrawalRoutes);
+app.use('/api/v1/washer/withdrawal', withdrawalRoutes);
+app.use('/api/v1/admin/settings/banners', bannerRoutes);
+app.use('/api/v1/customer/banners', customerBannerRoutes);
+app.use('/api/v1/washer/stripe-connect', stripeConnectRoutes);
 
-// Connect to database and start server
-const PORT = process.env.PORT || 3000;
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.statusCode || 500).json({
+    success: false,
+    message: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
 
-// Get local IP address for network access
-const getLocalIP = () => {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      // Skip internal (loopback) and non-IPv4 addresses
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return 'localhost';
-};
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found'
+  });
+});
 
-const localIP = getLocalIP();
-
-const startServer = async () => {
+// Start server
+async function startServer() {
   try {
-    // Connect to MongoDB (non-blocking - server will start even if MongoDB fails)
-    connectDatabase().catch((error) => {
-      console.error('⚠️ MongoDB connection failed, but server will continue running');
-      console.error('   You can still test API endpoints, but database operations will fail');
-      console.error('   Fix MongoDB connection to enable full functionality');
-    });
+    // Connect to database
+    await connectDatabase();
+    console.log('✅ MongoDB connected');
 
-    // Start server - bind to 0.0.0.0 to allow network access
-    app.listen(PORT, '0.0.0.0', () => {
+    // Start server
+    app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🌐 Local API URL: http://localhost:${PORT}/api/v1`);
-      console.log(`🌐 Network API URL: http://${localIP}:${PORT}/api/v1`);
-      console.log(`\n💡 Use the Network API URL to access from other devices on the same network`);
-      console.log(`⚠️ Note: MongoDB connection may still be in progress...`);
-      try {
-        getStripeInstance();
-      } catch (e) {
-        console.warn('⚠️ Stripe not configured:', e.message);
-      }
+      console.log(`📍 Health check: http://localhost:${PORT}/health`);
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error.message || error);
+    console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
-};
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  console.error('❌ UNHANDLED REJECTION! Shutting down...');
-  console.error('Error:', err);
-  // Don't exit - let server continue, but log the error
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-  console.error('❌ UNCAUGHT EXCEPTION! Shutting down...');
-  console.error('Error:', err);
-  // Don't exit - let server continue, but log the error
-});
+}
 
 startServer();
-
-
-
-
-
-
-
-

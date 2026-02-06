@@ -1,0 +1,21 @@
+/**
+ * Washer Notification Routes
+ * Handles FCM token management for washer app
+ */
+
+import express from 'express';
+import * as washerNotificationController from '../controllers/washerNotification.controller.js';
+import { protectWasher } from '../middleware/auth.middleware.js';
+
+const router = express.Router();
+
+// All routes require washer authentication
+router.use(protectWasher);
+
+// Save/Update FCM token
+router.post('/fcm-token', washerNotificationController.saveFcmToken);
+
+// Remove FCM token
+router.delete('/fcm-token', washerNotificationController.removeFcmToken);
+
+export default router;

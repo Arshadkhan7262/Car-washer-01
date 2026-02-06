@@ -9,23 +9,23 @@ const washerSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: [true, 'Name is required'],
+    required: true,
     trim: true
   },
   phone: {
     type: String,
-    required: [true, 'Phone number is required'],
-    unique: true,
+    required: true,
     trim: true
   },
   email: {
     type: String,
+    required: true,
     lowercase: true,
     trim: true
   },
   status: {
     type: String,
-    enum: ['pending', 'active', 'suspended', 'inactive'],
+    enum: ['pending', 'active', 'suspended'],
     default: 'pending'
   },
   online_status: {
@@ -34,9 +34,7 @@ const washerSchema = new mongoose.Schema({
   },
   rating: {
     type: Number,
-    default: 0,
-    min: 0,
-    max: 5
+    default: 0
   },
   total_jobs: {
     type: Number,
@@ -54,40 +52,31 @@ const washerSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  stripe_account_id: {
+    type: String
+  },
+  stripe_account_status: {
+    type: String,
+    enum: ['none', 'pending', 'restricted', 'enabled'],
+    default: 'none'
+  },
+  stripe_account_onboarding_complete: {
+    type: Boolean,
+    default: false
+  },
   branch_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Branch',
-    default: null
+    ref: 'Branch'
   },
   branch_name: {
-    type: String,
-    default: null,
-    trim: true
+    type: String
   },
   current_location: {
-    latitude: {
-      type: Number,
-      default: null
-    },
-    longitude: {
-      type: Number,
-      default: null
-    },
-    last_updated: {
-      type: Date,
-      default: null
-    },
-    heading: {
-      type: Number,  // Direction in degrees (0-360)
-      default: null,
-      min: 0,
-      max: 360
-    },
-    speed: {
-      type: Number,  // Speed in km/h
-      default: null,
-      min: 0
-    }
+    latitude: Number,
+    longitude: Number,
+    last_updated: Date,
+    heading: Number,
+    speed: Number
   },
   created_date: {
     type: Date,
@@ -98,16 +87,15 @@ const washerSchema = new mongoose.Schema({
     default: Date.now
   }
 }, {
-  timestamps: { createdAt: 'created_date', updatedAt: 'updated_date' }
+  timestamps: true
 });
 
-// Index for faster queries
-washerSchema.index({ status: 1, online_status: 1 });
+// Indexes
+washerSchema.index({ user_id: 1 });
+washerSchema.index({ status: 1 });
+washerSchema.index({ email: 1 });
 washerSchema.index({ phone: 1 });
 
-const Washer = mongoose.model('Washer', washerSchema);
+const Washer = mongoose.models.Washer || mongoose.model('Washer', washerSchema);
 
 export default Washer;
-
-
-
