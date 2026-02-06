@@ -48,6 +48,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   log('📱 [Background] ==========================================');
 
   // Show notification in system tray when app is in background/terminated
+  // Since backend now sends data-only payloads, we must show notifications manually
+  // This ensures consistent notification appearance and proper navigation handling
   try {
     final title = message.notification?.title ?? message.data['title']?.toString() ?? 'Wash Away';
     final body = message.notification?.body ?? message.data['body']?.toString() ?? 'You have a new notification';
@@ -60,24 +62,45 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         'high_importance_channel',
         'High Importance Notifications',
         description: 'This channel is used for important notifications.',
-        importance: Importance.high,
+        importance: Importance.max,
         playSound: true,
       );
       await plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(channel);
-      const details = AndroidNotificationDetails(
+      final details = AndroidNotificationDetails(
         'high_importance_channel',
         'High Importance Notifications',
         channelDescription: 'This channel is used for important notifications.',
-        importance: Importance.high,
-        priority: Priority.high,
+        importance: Importance.max,
+        priority: Priority.max,
         playSound: true,
         enableVibration: true,
         visibility: NotificationVisibility.public,
+        ticker: title,
       );
       final bookingId = message.data['booking_id']?.toString() ?? '';
       final screen = message.data['screen']?.toString() ?? 'track_order';
       final id = DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
       await plugin.show(id, title, body, NotificationDetails(android: details), payload: '$bookingId|$screen');
+      log('📱 [Background] Notification shown in tray: $title');
+    } else if (Platform.isIOS) {
+      // iOS handling
+      final plugin = FlutterLocalNotificationsPlugin();
+      const iosSettings = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
+      const initSettings = InitializationSettings(iOS: iosSettings);
+      await plugin.initialize(initSettings);
+      const details = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+      final bookingId = message.data['booking_id']?.toString() ?? '';
+      final screen = message.data['screen']?.toString() ?? 'track_order';
+      final id = DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
+      await plugin.show(id, title, body, NotificationDetails(iOS: details), payload: '$bookingId|$screen');
       log('📱 [Background] Notification shown in tray: $title');
     }
   } catch (e) {
@@ -127,6 +150,21 @@ void main() async {
         if (settings.authorizationStatus != AuthorizationStatus.authorized &&
             settings.authorizationStatus != AuthorizationStatus.provisional) {
           debugPrint('📱 [Notification] Enable in Settings → Apps → Wash Away → Notifications, then restart app');
+        }
+        
+        // IMPORTANT: Disable Firebase's automatic notification display in foreground
+        // We handle notifications manually via flutter_local_notifications to avoid duplicates
+        // This prevents Firebase from auto-showing notifications when app is in foreground
+        try {
+          await messaging.setForegroundNotificationPresentationOptions(
+            alert: false,  // Don't auto-show alert (we'll show via flutter_local_notifications)
+            badge: true,   // Still update badge
+            sound: false,  // Don't auto-play sound (we'll handle it)
+          );
+          debugPrint('✅ [Notification] Disabled Firebase auto-display in foreground (iOS)');
+        } catch (e) {
+          // setForegroundNotificationPresentationOptions is iOS-only, ignore on Android
+          debugPrint('ℹ️ [Notification] setForegroundNotificationPresentationOptions not available (Android)');
         }
       } catch (e) {
         debugPrint('⚠️ [Notification] Permission request failed: $e');
@@ -214,7 +252,7 @@ class _MyAppState extends State<MyApp> {
     log('🔄 [MyApp] Starting notification initialization...');
     
     try {
-      await Future.delayed(const Duration(milliseconds: 100)); // yield to UI
+      await Future.delayed(Duration.zero); // start as soon as possible
       log('🔄 [MyApp] Initializing NotificationController (permanent)...');
       Get.put(NotificationController(), permanent: true);
       log('✅ [MyApp] NotificationController initialized');

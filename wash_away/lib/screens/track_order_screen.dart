@@ -87,8 +87,8 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
       if (bookingId == widget.bookingId && mounted) {
         developer.log('📱 [TrackOrderScreen] Booking status update received via notification');
         developer.log('📱 Status: ${data['status']}');
-        // Immediately refresh tracking data
-        _fetchTrackingData(silent: true);
+        // Refresh tracking data - fromPushNotification: true to skip snackbar (system notification already showed)
+        _fetchTrackingData(silent: true, fromPushNotification: true);
       }
     };
     
@@ -149,7 +149,7 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchTrackingData({bool silent = false}) async {
+  Future<void> _fetchTrackingData({bool silent = false, bool fromPushNotification = false}) async {
     // Prevent multiple simultaneous requests
     if (_isRefreshing) return;
     
@@ -214,7 +214,8 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
           }
         }
         
-        if (message.isNotEmpty) {
+        // Don't show snackbar when update came from push notification - system notification already showed
+        if (message.isNotEmpty && !fromPushNotification) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(message),
@@ -372,7 +373,15 @@ class _TrackerOrderScreenState extends State<TrackerOrderScreen> {
           color: Theme.of(context).iconTheme.color,
         ),
         leading: IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            // Check if we can pop (there's a previous route)
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              // No previous route (came from notification), navigate to dashboard
+              Get.offAllNamed('/dashboard');
+            }
+          },
           icon: Icon(Icons.arrow_back),
         ),
         title: ListTile(
